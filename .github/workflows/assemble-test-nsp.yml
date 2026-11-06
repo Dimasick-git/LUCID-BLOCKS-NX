@@ -1,0 +1,21 @@
+name: Assemble test NSP
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Draft prerelease ID containing the verified upload manifest
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Assemble, verify and publish one NSP
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: python3 tools/assemble_release.py
