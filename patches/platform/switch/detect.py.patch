@@ -1,0 +1,36 @@
+--- a/platform/switch/detect.py
++++ b/platform/switch/detect.py
+@@ -17,6 +17,10 @@
+     if not os.path.isdir(os.environ["DEVKITPRO"] + "/devkitA64"):
+         return False
+     return True
++
++
++def get_tools(env):
++    return ["gcc", "g++", "as", "ar", "gnulink"]
+ 
+ 
+ def get_opts():
+@@ -63,6 +67,8 @@
+ 
+ def configure(env):
+     validate_arch(env["arch"], get_name(), ["arm64"])
++    if os.name == "nt":
++        env.use_windows_spawn_fix()
+ 
+     dkp = os.environ["DEVKITPRO"]
+     tool_prefix = dkp + "/devkitA64/bin/aarch64-none-elf-"
+@@ -73,9 +79,12 @@
+     env["AR"] = tool_prefix + "ar"
+     env["RANLIB"] = tool_prefix + "ranlib"
+     env["STRIP"] = tool_prefix + "strip"
++    if os.name == "nt":
++        env["ARCOM"] = '${TEMPFILE("$AR $ARFLAGS $TARGET.posix $SOURCES.posix")}'
++        env["MAXLINELENGTH"] = 2048
+ 
+     env["ENV"]["DEVKITPRO"] = dkp
+-    env["ENV"]["PATH"] = dkp + "/portlibs/switch/bin:" + dkp + "/devkitA64/bin:" + os.environ["PATH"]
++    env["ENV"]["PATH"] = os.pathsep.join([dkp + "/portlibs/switch/bin", dkp + "/devkitA64/bin", os.environ["PATH"]])
+ 
+     arch_flags = ["-march=armv8-a+crc+crypto", "-mtune=cortex-a57", "-mtp=soft", "-fPIE"]
+     env.Prepend(CCFLAGS=arch_flags + ["-ffunction-sections", "-fdata-sections"])

@@ -1,0 +1,44 @@
+--- a/platform/switch/SCsub
++++ b/platform/switch/SCsub
+@@ -2,6 +2,7 @@
+ Import("env")
+ 
+ import os
++import subprocess
+ 
+ files = [
+     "godot_switch.cpp",
+@@ -11,18 +12,21 @@
+     "gl_manager_switch.cpp",
+     "joypad_switch.cpp",
+     "switch_mbedtls_entropy.c",
++    "nx_salty.c",
+ ]
+ 
+ prog = env.add_program("#bin/godot", files)
+ 
+ dkp = os.environ["DEVKITPRO"]
+-version_str = "4.7.0"
++version_str = "0.1.0-test1"
+ 
+-env.Command(
+-    "nacp_default.nacp",
+-    None,
+-    dkp + "/tools/bin/nacptool --create Godot 'Stary & Cpasjuste' " + version_str + " $TARGET",
+-)
++def create_lucid_nacp(target, source, env):
++    tool = dkp + "/tools/bin/nacptool" + (".exe" if os.name == "nt" else "")
++    subprocess.run([tool, "--create", "Lucid Blocks NX", "Dimasick-git", version_str, str(target[0])], check=True)
++    return 0
++
++env.Command("nacp_default.nacp", None, create_lucid_nacp)
++env.Depends("nacp_default.nacp", env.Value(version_str))
+ 
+ env.Command(
+     "#bin/switch_${target}.nro",
+@@ -31,3 +35,5 @@
+     + "/tools/bin/elf2nro $SOURCE $TARGET --icon=platform/switch/icon.jpg --nacp=platform/switch/nacp_default.nacp --romfsdir=platform/switch/romfs",
+ )
+ env.Depends(target="#bin/switch_${target}.nro", dependency="nacp_default.nacp")
++
++env.Depends(target="#bin/switch_${target}.nro", dependency="icon.jpg")

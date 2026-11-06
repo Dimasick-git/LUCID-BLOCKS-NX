@@ -1,0 +1,69 @@
+--- a/main/main.cpp
++++ b/main/main.cpp
+@@ -582,7 +582,7 @@
+ 	print_help_option("--path <directory>", "Path to a project (<directory> must contain a \"project.godot\" file).\n", CLI_OPTION_AVAILABILITY_TEMPLATE_UNSAFE);
+ 	print_help_option("--scene <path>", "Path or UID of a scene in the project that should be started.\n", CLI_OPTION_AVAILABILITY_TEMPLATE_UNSAFE);
+ #endif // defined(OVERRIDE_PATH_ENABLED)
+-#if defined(OVERRIDE_PATH_ENABLED) || defined(ANDROID_ENABLED) || defined(WEB_ENABLED)
++#if defined(OVERRIDE_PATH_ENABLED) || defined(ANDROID_ENABLED) || defined(WEB_ENABLED) || defined(HORIZON_ENABLED)
+ 	print_help_option("--main-pack <file>", "Path to a pack (.pck) file to load.\n", CLI_OPTION_AVAILABILITY_TEMPLATE_UNSAFE);
+ #endif // defined(OVERRIDE_PATH_ENABLED) || defined(ANDROID_ENABLED) || defined(WEB_ENABLED)
+ 
+@@ -1908,7 +1908,8 @@
+ 		} else if (arg == "--main-pack") {
+ // Note: main-pack is always used on web and can't be disabled.
+ // Note: main-pack can be used on Android so long as it's located within the 'assets' directory which is in the executable.
+-#if defined(OVERRIDE_PATH_ENABLED) || defined(WEB_ENABLED) || defined(ANDROID_ENABLED)
++// Switch stores the game PCK beside the NRO on SD, not inside the executable.
++#if defined(OVERRIDE_PATH_ENABLED) || defined(WEB_ENABLED) || defined(ANDROID_ENABLED) || defined(HORIZON_ENABLED)
+ 			if (N) {
+ 				main_pack = N->get();
+ 				N = N->next();
+@@ -1937,7 +1938,7 @@
+ 					"`--main-pack` was specified on the command line, but this Godot binary was compiled without support for path overrides. Aborting.\n"
+ 					"To be able to use it, use the `disable_path_overrides=no` SCons option when compiling Godot.\n");
+ 			goto error;
+-#endif // defined(OVERRIDE_PATH_ENABLED) || defined(WEB_ENABLED) || defined(ANDROID_ENABLED)
++#endif // External main pack: desktop overrides, web, Android assets, or Switch SD
+ 
+ 		} else if (arg == "-d" || arg == "--debug") {
+ 			debug_uri = "local://";
+@@ -5134,9 +5135,15 @@
+ 	NavigationServer3D::get_singleton()->process(process_step * time_scale);
+ #endif // NAVIGATION_3D_DISABLED
+ 
++#ifdef HORIZON_ENABLED
++    const uint64_t nx_script_end = OS::get_singleton()->get_ticks_usec();
++#endif
+ 	GodotProfileZoneGrouped(_profile_zone, "RenderingServer::sync");
+ 	RenderingServer::get_singleton()->sync(); //sync if still drawing from previous frames.
+ 
++#ifdef HORIZON_ENABLED
++    const uint64_t nx_sync_end = OS::get_singleton()->get_ticks_usec();
++#endif
+ 	GodotProfileZoneGrouped(_profile_zone, "RenderingServer::draw");
+ 	const bool has_pending_resources_for_processing = RD::get_singleton() && RD::get_singleton()->has_pending_resources_for_processing();
+ 	bool wants_present = (DisplayServer::get_singleton()->can_any_window_draw() ||
+@@ -5157,6 +5164,22 @@
+ 		}
+ 	}
+ 
++#ifdef HORIZON_ENABLED
++    const uint64_t nx_draw_end = OS::get_singleton()->get_ticks_usec();
++    static uint64_t nx_stage_start = 0, nx_script_us = 0, nx_sync_us = 0, nx_draw_us = 0;
++    static unsigned nx_stage_frames = 0;
++    if (!nx_stage_start) nx_stage_start = nx_draw_end;
++    nx_script_us += nx_script_end - process_begin;
++    nx_sync_us += nx_sync_end - nx_script_end;
++    nx_draw_us += nx_draw_end - nx_sync_end;
++    nx_stage_frames++;
++    if (nx_draw_end - nx_stage_start >= 5000000) {
++        printf("[nx-stage] script_avg_ms=%.2f sync_avg_ms=%.2f draw_submit_present_avg_ms=%.2f cpu_allocated_MiB=%llu\n",
++                nx_script_us / (1000.0 * nx_stage_frames), nx_sync_us / (1000.0 * nx_stage_frames), nx_draw_us / (1000.0 * nx_stage_frames),
++                (unsigned long long)(Memory::get_mem_usage() / 1048576));
++        nx_stage_start = nx_draw_end; nx_script_us = 0; nx_sync_us = 0; nx_draw_us = 0; nx_stage_frames = 0;
++    }
++#endif
+ 	process_ticks = OS::get_singleton()->get_ticks_usec() - process_begin;
+ 	process_max = MAX(process_ticks, process_max);
+ 	uint64_t frame_time = OS::get_singleton()->get_ticks_usec() - ticks;

@@ -1,0 +1,47 @@
+--- a/main/world/rendering/block_mesh/block_mesh_renderer.gdshader
++++ b/main/world/rendering/block_mesh/block_mesh_renderer.gdshader
+@@ -1,4 +1,6 @@
+ shader_type spatial;
++// NX minimum: matte terrain avoids metallic/roughness texture fetches and specular lighting.
++render_mode diffuse_lambert, specular_disabled;
+ 
+ uniform sampler2DArray textures: filter_nearest, source_color;
+ uniform sampler2DArray metallic_textures: filter_nearest, source_color;
+@@ -27,8 +29,6 @@
+ 	float side_u = (float(side_index) + fract(UV.x)) / 6.0;
+ 	float block_layer = floor(float(block_index) + 0.5);
+ 	vec3 main = vec3(0.0);
+-	float roughness = 0.0;
+-	float metallic = 0.0;
+ 
+ 	if (side_index == 0 && UV2.x > 0.0) {
+ 		int rotation = random(floor(world_vertex.xz));
+@@ -48,23 +48,20 @@
+ 		float v = local_uv.y;
+ 
+ 		main = texture(textures, vec3(u, v, block_layer)).rgb;
+-		metallic = texture(metallic_textures, vec3(u, v, block_layer)).r;
+-		roughness = texture(roughness_textures, vec3(u, v, block_layer)).r;
+ 	} else {
+ 		main = texture(textures, vec3(side_u, fract(UV.y), block_layer)).rgb;
+-		metallic = texture(metallic_textures, vec3(side_u, fract(UV.y), block_layer)).r;
+-		roughness = texture(roughness_textures, vec3(side_u, fract(UV.y), block_layer)).r;
+ 	}
+ 
+ 	ALBEDO = main;
+ 	
+ 	// this is used for a special effect, modulated by the 'drug' uniform
++	if (drug != 0.0) {
+ 	ALBEDO += drug * texture(noise_texture, vec2(TIME) * 0.05 + SCREEN_UV + world_vertex.xy * 0.1).r * (0.55 + sin(TIME) * 0.3) * drug * texture(eye_texture, 0.1 * world_vertex.xy + 0.1 * vec2(sin(TIME) * 0.8 + TIME, cos(TIME * 0.9) * 0.7)).rgb;
+-	if (ALBEDO.r < 0.21 - (1.0 - drug)) {
+-		discard;
+ 	}
++	// NX minimum: opaque terrain remains opaque during the cosmetic drug effect.
+ 
+-	METALLIC = metallic;
+-	ROUGHNESS = roughness;
++
++	METALLIC = 0.0;
++	ROUGHNESS = 1.0;
+ 	SPECULAR = 0.3;
+ }

@@ -1,0 +1,15 @@
+--- a/drivers/gles3/storage/light_storage.cpp
++++ b/drivers/gles3/storage/light_storage.cpp
+@@ -179,6 +179,12 @@
+ void LightStorage::light_set_shadow(RID p_light, bool p_enabled) {
+ 	Light *light = light_owner.get_or_null(p_light);
+ 	ERR_FAIL_NULL(light);
++#ifdef HORIZON_ENABLED
++    // Minimum Switch profile: local shadow passes are too expensive, and
++    // shipped OmniLights request dual-paraboloid shadows unsupported by GLES.
++    if (light->type != RSE::LIGHT_DIRECTIONAL) p_enabled = false;
++    if (light->shadow == p_enabled) return;
++#endif
+ 	if (light->type == RSE::LIGHT_AREA) {
+ 		light->shadow = false;
+ 	} else {

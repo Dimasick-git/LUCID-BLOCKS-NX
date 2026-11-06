@@ -1,0 +1,8 @@
+--- a/main/autoload/render_checker.gd
++++ b/main/autoload/render_checker.gd
+@@ -5,4 +5,4 @@
+ 
+ func _ready() -> void :
+ 	var rendering_method: String = RenderingServer.get_current_rendering_method()
+-	must_warn = rendering_method == "gl_compatibility"
++	must_warn = rendering_method == "gl_compatibility" and not OS.has_feature("switch")

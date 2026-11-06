@@ -1,0 +1,43 @@
+--- a/main/autoload/item_map.gd
++++ b/main/autoload/item_map.gd
+@@ -13,6 +13,7 @@
+ 
+ 
+ func _ready() -> void :
++	var nx_stage_start := Time.get_ticks_msec()
+ 	var stack: Array[String] = [item_path]
+ 	var loader_helper: ItemLoader = ItemLoader.new()
+ 
+@@ -50,11 +51,15 @@
+ 								all_item_ids.append(new_block.id)
+ 			file_name = dir.get_next()
+ 	print("Items loaded.")
++	print("[nx-startup] item_resources_ms=", Time.get_ticks_msec()-nx_stage_start)
++	nx_stage_start = Time.get_ticks_msec()
+ 	all_item_ids.sort()
+ 
+ 	Ref.world.reload_types()
+ 	Ref.world.set_block_indices()
+ 	Ref.world.create_texture_atlas()
++	print("[nx-startup] block_atlas_ms=", Time.get_ticks_msec()-nx_stage_start)
++	nx_stage_start = Time.get_ticks_msec()
+ 
+ 
+ 
+@@ -62,6 +67,8 @@
+ 	await Ref.main.get_node("%IconGenerator").generate_icons()
+ 	Ref.main.get_node("%IconGenerator").queue_free()
+ 
++	print("[nx-startup] icons_and_meshes_ms=", Time.get_ticks_msec()-nx_stage_start)
++	nx_stage_start = Time.get_ticks_msec()
+ 	print("Preloading item scenes...")
+ 	for id in all_item_ids:
+ 		var item: Item = id_to_resource[id]
+@@ -71,6 +78,7 @@
+ 		if item is Spawner and item.entity_path != "":
+ 			item.entity_scene = ResourceLoader.load(item.entity_path)
+ 	print("Item scenes preloaded.")
++	print("[nx-startup] item_scenes_ms=", Time.get_ticks_msec()-nx_stage_start)
+ 
+ 	items_done_loading.emit()
+ 	all_items_loaded = true

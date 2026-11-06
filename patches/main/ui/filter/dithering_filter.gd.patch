@@ -1,0 +1,15 @@
+--- a/main/ui/filter/dithering_filter.gd
++++ b/main/ui/filter/dithering_filter.gd
+@@ -8,8 +8,10 @@
+ 
+ 
+ func _on_under_water_status_changed(under_water: bool):
+-	material.set_shader_parameter("lod_level", 0.4 if under_water else 0.0)
++	material.set_shader_parameter("lod_level", 0.0 if OS.has_feature("switch") else (0.4 if under_water else 0.0))
+ 
+ 
+ func _on_settings_updated() -> void :
+-	material.set_shader_parameter("alpha", Ref.save_file_manager.settings_file.get_data("dither_amount", 0.8))
++	var amount: float = Ref.save_file_manager.settings_file.get_data("dither_amount", 0.8)
++	visible = amount > 0.0
++	material.set_shader_parameter("alpha", amount)

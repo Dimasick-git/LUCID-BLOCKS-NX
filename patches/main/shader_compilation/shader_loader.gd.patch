@@ -1,0 +1,29 @@
+--- a/main/shader_compilation/shader_loader.gd
++++ b/main/shader_compilation/shader_loader.gd
+@@ -14,6 +14,9 @@
+ 
+ 
+ func must_compile_shaders() -> bool:
++	if OS.has_feature("switch"):
++		return false # Compile only the materials needed by the current scene.
++
+ 	var current_version: String = ProjectSettings.get_setting("application/config/version")
+ 	var bake_version: String = Ref.save_file_manager.device_file.get_data("save_version", "0.0.0")
+ 
+@@ -31,7 +34,7 @@
+ 		ResourceSaver.save(cache, cached_path)
+ 
+ 	var previously_enabled: bool = Ref.environment.environment.sdfgi_enabled
+-	Ref.environment.environment.sdfgi_enabled = true
++	Ref.environment.environment.sdfgi_enabled = not OS.has_feature("switch")
+ 	var count: int = 0
+ 	var paths: PackedStringArray = ResourceLoader.load(cached_path).paths
+ 	for scene_path in paths:
+@@ -120,4 +123,7 @@
+ 			node.visible = true
+ 			node.emitting = true
+ 			to_cache = true
++	# Keep nodes moved into the bake viewport; release the unused scene root.
++	if not root.is_inside_tree():
++		root.free()
+ 	return to_cache

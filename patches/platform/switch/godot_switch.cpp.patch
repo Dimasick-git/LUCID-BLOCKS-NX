@@ -1,0 +1,369 @@
+--- a/platform/switch/godot_switch.cpp
++++ b/platform/switch/godot_switch.cpp
+@@ -11,9 +11,12 @@
+ #include <locale.h>
+ #include <stdlib.h>
+ #include <unistd.h>
++#include <netinet/in.h>
+ #include <zlib.h>
+ 
+ #include "main/main.h"
++#include "core/object/class_db.h"
++#include "core/object/ref_counted.h"
+ #include "os_switch.h"
+ #include "switch_clocks.h"
+ 
+@@ -23,6 +26,25 @@
+ // Applets (album, user page, ...) get too little memory to run the engine;
+ // show the "please launch as application" splash instead, as the 3.x port does.
+ static int applet_splash_main() {
++    consoleInit(nullptr);
++    printf("Lucid Blocks NX\n\nLaunch with the installed forwarder or full-memory hbmenu.\nAlbum applet mode does not have enough memory.\n\nPress any button to exit.\n");
++    PadState pad;
++    padConfigureInput(1, HidNpadStyleSet_NpadStandard);
++    padInitializeDefault(&pad);
++    while (appletMainLoop()) {
++        padUpdate(&pad);
++        if (padGetButtonsDown(&pad)) break;
++        consoleUpdate(nullptr);
++    }
++    consoleExit(nullptr);
++    return 0;
++}
++
++// [Switch fork] Draw the bundled splash to the framebuffer and release it, WITHOUT
++// waiting for input. The last presented frame stays on screen until GL renders, so
++// calling this right before the (slow) engine init paints over the otherwise-grey
++// boot. 
++[[maybe_unused]] static void draw_boot_splash() {
+ 	NWindow *win = nwindowGetDefault();
+ 	Framebuffer fb;
+ 	framebufferCreate(&fb, win, FB_WIDTH, FB_HEIGHT, PIXEL_FORMAT_RGBA_8888, 1);
+@@ -30,6 +52,7 @@
+ 
+ 	u32 stride;
+ 	u32 *framebuf = (u32 *)framebufferBegin(&fb, &stride);
++	memset(framebuf, 0, stride * FB_HEIGHT);
+ 
+ 	FILE *splash = fopen("romfs:/applet_splash.rgba.gz", "rb");
+ 	if (splash) {
+@@ -39,8 +62,6 @@
+ 		fseek(splash, 0, SEEK_SET);
+ 		fread(compressed_splash, 1, splash_size, splash);
+ 		fclose(splash);
+-
+-		memset(framebuf, 0, stride * FB_HEIGHT);
+ 
+ 		struct z_stream_s stream;
+ 		memset(&stream, 0, sizeof(stream));
+@@ -55,63 +76,26 @@
+ 		free(compressed_splash);
+ 	}
+ 	framebufferEnd(&fb);
+-
+-	PadState pad;
+-	padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+-	padInitializeDefault(&pad);
+-	while (appletMainLoop()) {
+-		padUpdate(&pad);
+-		if (padGetButtonsDown(&pad) != 0) {
+-			break;
+-		}
+-	}
+-	framebufferClose(&fb);
+-	return 0;
+-}
+-
+-// [Switch fork] Draw the bundled splash to the framebuffer and release it, WITHOUT
+-// waiting for input. The last presented frame stays on screen until GL renders, so
+-// calling this right before the (slow) engine init paints over the otherwise-grey
+-// boot. 
+-static void draw_boot_splash() {
+-	NWindow *win = nwindowGetDefault();
+-	Framebuffer fb;
+-	framebufferCreate(&fb, win, FB_WIDTH, FB_HEIGHT, PIXEL_FORMAT_RGBA_8888, 1);
+-	framebufferMakeLinear(&fb);
+-
+-	u32 stride;
+-	u32 *framebuf = (u32 *)framebufferBegin(&fb, &stride);
+-	memset(framebuf, 0, stride * FB_HEIGHT);
+-
+-	FILE *splash = fopen("romfs:/applet_splash.rgba.gz", "rb");
+-	if (splash) {
+-		fseek(splash, 0, SEEK_END);
+-		size_t splash_size = ftell(splash);
+-		u8 *compressed_splash = (u8 *)malloc(splash_size);
+-		fseek(splash, 0, SEEK_SET);
+-		fread(compressed_splash, 1, splash_size, splash);
+-		fclose(splash);
+-
+-		struct z_stream_s stream;
+-		memset(&stream, 0, sizeof(stream));
+-		stream.next_in = compressed_splash;
+-		stream.avail_in = splash_size;
+-		stream.next_out = (u8 *)framebuf;
+-		stream.avail_out = stride * FB_HEIGHT;
+-		if (inflateInit2(&stream, 16 + MAX_WBITS) == Z_OK) {
+-			inflate(&stream, 0);
+-			inflateEnd(&stream);
+-		}
+-		free(compressed_splash);
+-	}
+-	framebufferEnd(&fb);
+ 	framebufferClose(&fb);
+ }
+ 
+ int main(int argc, char *argv[]) {
+ 	socketInitializeDefault();
+ 	nxlinkStdio();
+-	romfsInit();
++    mkdir("sdmc:/switch", 0777);
++    mkdir("sdmc:/switch/lucid-blocks", 0777);
++    if (__nxlink_host.s_addr == 0) {
++        FILE *boot_log = fopen("sdmc:/switch/lucid-blocks/boot.log", "w");
++        if (boot_log) {
++            dup2(fileno(boot_log), STDOUT_FILENO);
++            dup2(fileno(boot_log), STDERR_FILENO);
++            setvbuf(stdout, nullptr, _IOLBF, 0);
++            setvbuf(stderr, nullptr, _IOLBF, 0);
++        }
++    }
++    printf("[lucid-nx] boot: Godot/Horizon double precision\n");
++	Result romfs_result = romfsInit();
++	printf("[lucid-nx] romfs result=%08x\n", romfs_result);
+ 
+ 	// Enable Mesa's on-disk shader cache; it normally keys off $HOME, which
+ 	// doesn't exist on Horizon. Caches the GLSL -> GPU ISA compilation in
+@@ -119,12 +103,12 @@
+ 	// spellings are set (Mesa <= 21 used MESA_GLSL_*). Harmless if the
+ 	// portlibs Mesa build has the disk cache compiled out.
+ 	mkdir("sdmc:/switch", 0777);
+-	mkdir("sdmc:/switch/godot4", 0777);
+-	mkdir("sdmc:/switch/godot4/cache", 0777);
+-	mkdir("sdmc:/switch/godot4/cache/mesa", 0777);
++	mkdir("sdmc:/switch/lucid-blocks", 0777);
++	mkdir("sdmc:/switch/lucid-blocks/cache", 0777);
++	mkdir("sdmc:/switch/lucid-blocks/cache/mesa", 0777);
+ 	mkdir("sdmc:/godot", 0777);
+-	setenv("MESA_GLSL_CACHE_DIR", "sdmc:/switch/godot4/cache/mesa", 1);
+-	setenv("MESA_SHADER_CACHE_DIR", "sdmc:/switch/godot4/cache/mesa", 1);
++	setenv("MESA_GLSL_CACHE_DIR", "sdmc:/switch/lucid-blocks/cache/mesa", 1);
++	setenv("MESA_SHADER_CACHE_DIR", "sdmc:/switch/lucid-blocks/cache/mesa", 1);
+ 	setenv("MESA_GLSL_CACHE_MAX_SIZE", "256M", 1);
+ 	setenv("MESA_SHADER_CACHE_MAX_SIZE", "256M", 1);
+ 	// Marshal GL calls on a driver-side thread; draw-call submission is the
+@@ -133,6 +117,7 @@
+ 	setenv("mesa_glthread", "true", 1);
+ 
+ 	int apptype = appletGetAppletType();
++	printf("[lucid-nx] applet type=%d\n", apptype);
+ 	if (apptype != AppletType_Application && apptype != AppletType_SystemApplication) {
+ 		int ret = applet_splash_main();
+ 		romfsExit();
+@@ -142,22 +127,19 @@
+ 
+ 	// [Switch fork] Boot splash during engine init (application mode). Bridges the
+ 	// grey gap before Godot's own boot splash / first GL frame appears.
+-	draw_boot_splash();
+-
+-	// Clock policy: use the system defaults, exactly like a regular title.
+-	// The loader (or the user) can opt into boost-profile clocks per game
+-	// with --switch-clocks=boost. The clkrst sessions always open read-only
+-	// so --switch-perf can report the live GPU clock.
+-	bool has_clkrst = switch_clocks_init();
++	// The game supplies its own startup image after project settings load.
++
++	printf("[lucid-nx] clock service access disabled\n");
+ 
+ 	OS_Switch os;
+ 	os.set_executable_path(argv[0]);
++	printf("[lucid-nx] OS initialized\n");
+ 
+ 	setlocale(LC_CTYPE, "");
+ 
+ 	// Consume platform-specific arguments before Godot sees them.
+ 	// --switch-os-name=<Name>: identity reported to the game (see os_switch.cpp).
+-	char **args = (char **)malloc(sizeof(char *) * argc);
++	char **args = (char **)malloc(sizeof(char *) * (argc + 5));
+ 	int arg_count = 0;
+ 	for (int i = 1; i < argc; i++) {
+ 		const char *prefix = "--switch-os-name=";
+@@ -176,18 +158,48 @@
+ 			os.set_environment("GODOT_DEKO3D_SHADER_CACHE", dksh_path);
+ 		} else if (strcmp(argv[i], "--switch-perf") == 0) {
+ 			os.perf_logging = true;
+-		} else if (strcmp(argv[i], "--switch-clocks=boost") == 0) {
+-			if (has_clkrst) {
+-				switch_clocks_set_boost(true);
+-				switch_clocks_apply(appletGetOperationMode() == AppletOperationMode_Console);
+-			}
++		} else if (strncmp(argv[i], "--switch-clocks=", 16) == 0) {
++            printf("[lucid-nx] clock override ignored; system clocks retained\n");
+ 		} else {
+ 			args[arg_count++] = argv[i];
+ 		}
+ 	}
+ 
++    bool has_pack_arg = false;
++    bool has_renderer_arg = false;
++    for (int i = 0; i < arg_count; ++i) {
++        if (!strcmp(args[i], "--main-pack")) has_pack_arg = true;
++        if (!strcmp(args[i], "--rendering-method")) has_renderer_arg = true;
++    }
++    char game_pack[1024];
++    snprintf(game_pack, sizeof(game_pack), "%s", "sdmc:/switch/lucid-blocks/game.pck");
++    if (!has_pack_arg) {
++        args[arg_count++] = const_cast<char *>("--main-pack");
++        args[arg_count++] = game_pack;
++    }
++    if (!has_renderer_arg) {
++        args[arg_count++] = const_cast<char *>("--rendering-method");
++        args[arg_count++] = const_cast<char *>("gl_compatibility");
++    }
++    // The installed title contains both NRO and PCK. Mount independently of
++    // the NRO's own asset RomFS; saves and caches continue to use the SD path.
++    bool title_romfs_mounted = false;
++    Result title_rc = romfsMountFromCurrentProcess("title");
++    if (R_SUCCEEDED(title_rc)) {
++        FILE *probe = fopen("title:/lucid-blocks/game.pck", "rb");
++        if (probe && !has_pack_arg) {
++            fclose(probe);
++            snprintf(game_pack, sizeof(game_pack), "%s", "title:/lucid-blocks/game.pck");
++            title_romfs_mounted = true;
++        } else {
++            if (probe) fclose(probe);
++            romfsUnmount("title");
++        }
++    }
++    printf("[lucid-nx] loading %s\n", has_pack_arg ? "explicit pack" : game_pack);
+ 	Error err = Main::setup(argv[0], arg_count, args);
+ 	free(args);
++	printf("[lucid-nx] Main::setup result=%d\n", (int)err);
+ 	if (err != OK) {
+ 		romfsExit();
+ 		socketExit();
+@@ -197,6 +209,31 @@
+ 		return EXIT_FAILURE;
+ 	}
+ 
++    const char *required_classes[] = {"World", "Chunk", "Item", "Block", "ItemState", "Loot", "Biome", "Structure", "Essence", "ItemLoader"};
++    for (const char *class_name : required_classes) {
++        if (!ClassDB::class_exists(StringName(class_name))) {
++            printf("[lucid-nx] FATAL: required native class missing: %s; aborting before scripts\n", class_name);
++            Main::cleanup();
++            romfsExit();
++            socketExit();
++            return EXIT_FAILURE;
++        }
++    }
++    printf("[lucid-nx] NSP01: required voxel classes present\n");
++
++    // Exercise the exact constructor callback that faulted before loading scenes.
++    for (const char *class_name : {"Essence", "Item"}) {
++        Ref<RefCounted> resource(Object::cast_to<RefCounted>(ClassDB::instantiate(StringName(class_name))));
++        if (resource.is_null()) {
++            printf("[lucid-nx] FATAL: native resource construction failed: %s\n", class_name);
++            Main::cleanup();
++            romfsExit();
++            socketExit();
++            return EXIT_FAILURE;
++        }
++        printf("[lucid-nx] native construction probe passed: %s\n", class_name);
++    }
++
+ 	if (Main::start() == EXIT_SUCCESS) {
+ 		os.run();
+ 	} else {
+@@ -204,82 +241,19 @@
+ 	}
+ 	Main::cleanup();
+ 
+-	if (has_clkrst) {
+-		switch_clocks_shutdown();
+-	}
+ 
+ 	romfsExit();
+ 	socketExit();
++	if (title_romfs_mounted) romfsUnmount("title");
+ 	return os.get_exit_code();
+ }
+ 
+-// --- Clock management (see switch_clocks.h) ---
+-
+-static ClkrstSession g_cpu_session = {};
+-static ClkrstSession g_gpu_session = {};
+-static ClkrstSession g_emc_session = {};
+-static bool g_cpu_ok = false, g_gpu_ok = false, g_emc_ok = false;
+-static bool g_clkrst_ok = false;
+-static bool g_boost = false;
+-
+-bool switch_clocks_init() {
+-	g_clkrst_ok = R_SUCCEEDED(clkrstInitialize());
+-	if (g_clkrst_ok) {
+-		g_cpu_ok = R_SUCCEEDED(clkrstOpenSession(&g_cpu_session, PcvModuleId_CpuBus, 3));
+-		g_gpu_ok = R_SUCCEEDED(clkrstOpenSession(&g_gpu_session, PcvModuleId_GPU, 3));
+-		g_emc_ok = R_SUCCEEDED(clkrstOpenSession(&g_emc_session, PcvModuleId_EMC, 3));
+-	}
+-	return g_clkrst_ok;
+-}
+-
+-void switch_clocks_set_boost(bool p_boost) {
+-	g_boost = p_boost;
+-}
+-
+-bool switch_clocks_boost_enabled() {
+-	return g_boost;
+-}
+-
+-void switch_clocks_apply(bool p_docked) {
+-	if (!g_clkrst_ok || !g_boost) {
+-		return;
+-	}
+-	if (g_cpu_ok) {
+-		clkrstSetClockRate(&g_cpu_session, 1785000000);
+-	}
+-	if (g_gpu_ok) {
+-		clkrstSetClockRate(&g_gpu_session, p_docked ? 768000000 : 460800000);
+-	}
+-	if (g_emc_ok) {
+-		clkrstSetClockRate(&g_emc_session, p_docked ? 1600000000 : 1331200000);
+-	}
+-	printf("Boost clocks applied (%s: CPU 1785 MHz, GPU %d MHz).\n", p_docked ? "docked" : "handheld", p_docked ? 768 : 460);
+-	fflush(stdout);
+-}
+-
+-uint32_t switch_clocks_get_gpu_mhz() {
+-	if (!g_clkrst_ok || !g_gpu_ok) {
+-		return 0;
+-	}
+-	u32 hz = 0;
+-	if (R_FAILED(clkrstGetClockRate(&g_gpu_session, &hz))) {
+-		return 0;
+-	}
+-	return hz / 1000000;
+-}
+-
+-void switch_clocks_shutdown() {
+-	if (!g_clkrst_ok) {
+-		return;
+-	}
+-	if (g_emc_ok) {
+-		clkrstCloseSession(&g_emc_session);
+-	}
+-	if (g_gpu_ok) {
+-		clkrstCloseSession(&g_gpu_session);
+-	}
+-	if (g_cpu_ok) {
+-		clkrstCloseSession(&g_cpu_session);
+-	}
+-	clkrstExit();
+-}
++// Clock services are deliberately absent from this game runtime. The first
++// console run fatally aborted pcv before Main::setup; even opening sessions
++// must not be part of boot or profiling on this firmware.
++bool switch_clocks_init() { return false; }
++void switch_clocks_set_boost(bool) {}
++bool switch_clocks_boost_enabled() { return false; }
++void switch_clocks_apply(bool) {}
++uint32_t switch_clocks_get_gpu_mhz() { return 0; }
++void switch_clocks_shutdown() {}

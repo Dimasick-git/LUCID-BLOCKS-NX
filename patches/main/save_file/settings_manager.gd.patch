@@ -1,0 +1,40 @@
+--- a/main/save_file/settings_manager.gd
++++ b/main/save_file/settings_manager.gd
+@@ -56,10 +56,36 @@
+ 	var preset: int = Ref.save_file_manager.settings_file.get_data("graphics_preset", -1)
+ 	var last_selected_preset: int = Ref.save_file_manager.device_file.get_data("last_graphics_preset", SettingsManager.MEDIUM)
+ 	var used_preset: int = preset if preset != -1 else last_selected_preset
++	var migrate_nx: bool = OS.has_feature("switch") and Ref.save_file_manager.device_file.get_data("nx_profile_version", 0) < 2
++	if migrate_nx:
++		for key in NX_DEFAULTS:
++			Ref.save_file_manager.settings_file.set_data(key, NX_DEFAULTS[key])
++		Ref.save_file_manager.settings_file.set_data("graphics_preset", MINIMUM)
++		Ref.save_file_manager.device_file.set_data("last_graphics_preset", MINIMUM)
++		Ref.save_file_manager.device_file.set_data("nx_profile_version", 2)
+ 	for setting in all_settings:
+-		Ref.save_file_manager.settings_file.set_data(setting, Ref.save_file_manager.settings_file.get_data(setting, get_default_setting(setting, used_preset)))
++		var default_value: Variant = get_default_setting(setting, used_preset)
++		Ref.save_file_manager.settings_file.set_data(setting, Ref.save_file_manager.settings_file.get_data(setting, default_value))
++
++	if migrate_nx:
++		Ref.save_file_manager.write_settings_file()
++		Ref.save_file_manager.write_device_file()
++		print("[lucid-nx] minimum profile v2: distance 32, render 100%, effects off")
++
++const NX_DEFAULTS: Dictionary = {
++    "fps_cap": 60, "vsync_enabled": true,
++    "render_distance": 32, "render_scale": 100, "dither_amount": 0.0,
++    "ssil": false, "ssr": false, "ssao": false,
++    "sdfgi": false, "bloom": false,
++    "shadow_quality": 0, "fog_quality": 0, "weather_quality": 0,
++    "low_quality_fractal": true,
++}
+ 
+ func get_default_setting(setting: String, preset: int = -1) -> Variant:
++	if OS.has_feature("switch"):
++		if setting == "render_scale": return 100
++		if setting == "dither_amount": return 0.0
++		if setting == "render_distance": return [32, 32, 48, 64][clampi(preset, 0, 3)]
+ 	match setting:
+ 
+ 		"fov": return 70

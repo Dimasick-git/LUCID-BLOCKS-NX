@@ -1,0 +1,57 @@
+--- a/drivers/gles3/rasterizer_scene_gles3.cpp
++++ b/drivers/gles3/rasterizer_scene_gles3.cpp
+@@ -2346,7 +2346,13 @@
+ 
+ 	GLuint global_buffer = GLES3::MaterialStorage::get_singleton()->global_shader_parameters_get_uniform_buffer();
+ 
++	#ifdef HORIZON_ENABLED
++	GLES3::MaterialStorage::get_singleton()->bind_global_shader_parameters();
++#else
++
++
+ 	glBindBufferBase(GL_UNIFORM_BUFFER, SCENE_GLOBALS_UNIFORM_LOCATION, global_buffer);
++#endif
+ 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+ 
+ 	scene_state.reset_gl_state();
+@@ -2493,7 +2499,12 @@
+ 	//////////
+ 
+ 	GLuint global_buffer = GLES3::MaterialStorage::get_singleton()->global_shader_parameters_get_uniform_buffer();
++	#ifdef HORIZON_ENABLED
++	GLES3::MaterialStorage::get_singleton()->bind_global_shader_parameters();
++#else
++
+ 	glBindBufferBase(GL_UNIFORM_BUFFER, SCENE_GLOBALS_UNIFORM_LOCATION, global_buffer);
++#endif
+ 
+ 	Color clear_color;
+ 	if (!is_reflection_probe && rb->render_target.is_valid()) {
+@@ -4077,7 +4088,13 @@
+ 
+ 	GLuint global_buffer = GLES3::MaterialStorage::get_singleton()->global_shader_parameters_get_uniform_buffer();
+ 
++	#ifdef HORIZON_ENABLED
++	GLES3::MaterialStorage::get_singleton()->bind_global_shader_parameters();
++#else
++
++
+ 	glBindBufferBase(GL_UNIFORM_BUFFER, SCENE_GLOBALS_UNIFORM_LOCATION, global_buffer);
++#endif
+ 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+ 
+ 	scene_state.reset_gl_state();
+@@ -4123,7 +4140,13 @@
+ 
+ 		GLuint global_buffer = GLES3::MaterialStorage::get_singleton()->global_shader_parameters_get_uniform_buffer();
+ 
++		#ifdef HORIZON_ENABLED
++	GLES3::MaterialStorage::get_singleton()->bind_global_shader_parameters();
++#else
++
++
+ 		glBindBufferBase(GL_UNIFORM_BUFFER, SCENE_GLOBALS_UNIFORM_LOCATION, global_buffer);
++#endif
+ 		glBindBuffer(GL_UNIFORM_BUFFER, 0);
+ 
+ 		scene_state.reset_gl_state();

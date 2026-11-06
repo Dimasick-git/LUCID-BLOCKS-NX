@@ -1,0 +1,18 @@
+--- a/main/ui/menu/transition/transition.gd
++++ b/main/ui/menu/transition/transition.gd
+@@ -18,9 +18,12 @@
+ 	Ref.player_camera.add_child(copy)
+ 	copy.remote_path = copy.get_path_to( %TransitionMeshOffset)
+ 
+-	post_transparent_texture = Texture2DRD.new()
+-	%ScaryTransition.material_override.set_shader_parameter("depth_post_transparent_texture", post_transparent_texture)
+-	Ref.player_camera.compositor.compositor_effects[0].depth_texture_recreated.connect(_on_depth_texture_recreated)
++	# NX: RD textures are only created on RenderingDevice renderers.
++	if RenderingServer.get_rendering_device() != null:
++		post_transparent_texture = Texture2DRD.new()
++		%ScaryTransition.material_override.set_shader_parameter("depth_post_transparent_texture", post_transparent_texture)
++		Ref.player_camera.compositor.compositor_effects[0].depth_texture_recreated.connect(_on_depth_texture_recreated)
++
+ 
+ 	%ScaryTransition.visible = false
+ 

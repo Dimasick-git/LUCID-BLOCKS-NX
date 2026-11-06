@@ -1,0 +1,22 @@
+--- a/main/world/living_block/atmosphere_block/atmosphere_block.gdshader
++++ b/main/world/living_block/atmosphere_block/atmosphere_block.gdshader
+@@ -1,4 +1,10 @@
+ shader_type spatial;
++
++#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
++#define NX_EYE_OFFSET vec3(0.0)
++#else
++#define NX_EYE_OFFSET EYE_OFFSET
++#endif
+ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
+ 
+ uniform vec4 albedo : source_color;
+@@ -26,7 +32,7 @@
+ void vertex() {
+ 	worldNormal = (MODEL_NORMAL_MATRIX * NORMAL);
+ 	worldPos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+-	worldEye = (INV_VIEW_MATRIX * vec4(EYE_OFFSET, 1.0)).xyz;
++	worldEye = (INV_VIEW_MATRIX * vec4(NX_EYE_OFFSET, 1.0)).xyz;
+ 	tex_position = TIME * 0.01 + VERTEX.xz / 2.0 + VERTEX.y;
+ 	float height = texture(displacement, tex_position).x;
+ 	VERTEX = VERTEX * (1.0 - attack) + attack * VERTEX * height * attack_scale;

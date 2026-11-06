@@ -1,0 +1,22 @@
+--- a/main/world/world.gd
++++ b/main/world/world.gd
+@@ -37,6 +37,10 @@
+ 
+ func _ready() -> void :
+ 	print("World children ready.")
++	if OS.has_feature("switch"):
++		chunk_render_limit = 1
++		chunk_batch_size = 1
++		decoration_batch_size = 2
+ 	if not Ref.player_fuser.fusion_table_loaded:
+ 		await Ref.player_fuser.fusion_table_done_loading
+ 
+@@ -75,7 +79,7 @@
+ 		if not is_all_loaded():
+ 			await all_loaded
+ 	instance_radius = int(Ref.save_file_manager.settings_file.get_data("render_distance", 80.0))
+-	usec_budget_per_frame = get_usec_from_fps()
++	usec_budget_per_frame = 2000 if OS.has_feature("switch") else get_usec_from_fps()
+ 
+ 	if load_enabled:
+ 		force_reload()

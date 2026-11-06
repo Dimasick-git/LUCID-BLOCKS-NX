@@ -1,0 +1,19 @@
+--- a/main/world/rendering/block_mesh/transparent_block_mesh_renderer.gdshader
++++ b/main/world/rendering/block_mesh/transparent_block_mesh_renderer.gdshader
+@@ -1,5 +1,5 @@
+ shader_type spatial;
+-render_mode cull_back;
++render_mode cull_back, diffuse_lambert, specular_disabled;
+ 
+ uniform sampler2DArray textures: filter_nearest, source_color;
+ uniform sampler2DArray metallic_textures: filter_nearest, source_color;
+@@ -18,7 +18,6 @@
+ 		discard;
+ 	}
+ 	ALBEDO = main.rgb;
+-	SPECULAR = 0.4;
+-	METALLIC = texture(metallic_textures, vec3(side_u, fract(UV.y), block_layer)).r;
+-	ROUGHNESS = texture(roughness_textures, vec3(side_u, fract(UV.y), block_layer)).r;
++	METALLIC = 0.0;
++	ROUGHNESS = 1.0;
+ }

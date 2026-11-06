@@ -1,0 +1,70 @@
+--- a/drivers/gles3/shader_gles3.cpp
++++ b/drivers/gles3/shader_gles3.cpp
+@@ -306,6 +306,11 @@
+ 
+ void ShaderGLES3::_compile_specialization(Version::Specialization &spec, uint32_t p_variant, Version *p_version, uint64_t p_specialization) {
+ 	spec.id = glCreateProgram();
++#ifdef HORIZON_ENABLED
++    // Request a retrievable binary before linking. Mesa otherwise may return
++    // zero GL_PROGRAM_BINARY_LENGTH, creating empty per-program cache records.
++    if (shader_cache_dir_valid) glProgramParameteri(spec.id, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE);
++#endif
+ 	spec.ok = false;
+ 	GLint status;
+ 
+@@ -635,6 +640,14 @@
+ 	return;
+ #else
+ 	ERR_FAIL_COND(!shader_cache_dir_valid);
++#ifdef HORIZON_ENABLED
++    static GLint nx_binary_formats = -1;
++    if (nx_binary_formats < 0) {
++        glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &nx_binary_formats);
++        printf("[nx-shader-cache] supported_formats=%d; zero disables empty cache writes\n", nx_binary_formats);
++    }
++    if (nx_binary_formats == 0) return;
++#endif
+ #if !defined(ANDROID_ENABLED) && !defined(IOS_ENABLED)
+ 	if (RasterizerUtilGLES3::is_gles_over_gl() && (glGetProgramBinary == nullptr)) { // ARB_get_program_binary extension not available.
+ 		return;
+@@ -661,6 +674,14 @@
+ 			const Version::Specialization *specialization = &kv.value;
+ 			GLint program_size = 0;
+ 			glGetProgramiv(specialization->id, GL_PROGRAM_BINARY_LENGTH, &program_size);
++#ifdef HORIZON_ENABLED
++            static unsigned nx_binary_reports = 0;
++            if (nx_binary_reports++ < 6) {
++                GLint formats = 0;
++                glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS, &formats);
++                printf("[nx-shader-cache] formats=%d binary_bytes=%d\n", formats, program_size);
++            }
++#endif
+ 			if (program_size == 0) {
+ 				f->store_32(0);
+ 				continue;
+@@ -710,8 +731,12 @@
+ 	for (int i = 0; i < variant_count; i++) {
+ 		p_version->variants.push_back(AHashMap<uint64_t, Version::Specialization>());
+ 		Version::Specialization spec;
++#ifndef HORIZON_ENABLED
+ 		_compile_specialization(spec, i, p_version, specialization_default_mask);
+ 		p_version->variants[i].insert(specialization_default_mask, spec);
++#endif
++        // On Switch _version_bind_shader compiles only the actual pass and
++        // specialization in use, instead of every unused default pass first.
+ 	}
+ 	if (use_cache) {
+ 		_save_to_cache(p_version);
+@@ -766,7 +791,11 @@
+ }
+ 
+ void ShaderGLES3::initialize(const String &p_general_defines, int p_base_texture_index) {
+-	general_defines = p_general_defines.utf8();
++	String defines = p_general_defines;
++#ifdef HORIZON_ENABLED
++    defines += "\n#define LUCID_NX_GLOBAL_TEXTURE\n";
++#endif
++    general_defines = defines.utf8();
+ 	base_texture_index = p_base_texture_index;
+ 
+ 	_init();

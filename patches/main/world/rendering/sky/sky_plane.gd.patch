@@ -1,0 +1,39 @@
+--- a/main/world/rendering/sky/sky_plane.gd
++++ b/main/world/rendering/sky/sky_plane.gd
+@@ -79,10 +79,13 @@
+ 	Ref.player_camera.add_child(copy)
+ 	copy.remote_path = copy.get_path_to( %SkyBoxOffset)
+ 
+-	post_transparent_texture = Texture2DRD.new()
+-	material_override.set_shader_parameter("depth_post_transparent_texture", post_transparent_texture)
+-	if fractal_sky.visible:
+-		fractal_sky.material_override.set_shader_parameter("depth_post_transparent_texture", post_transparent_texture)
++	# NX: RD textures are only created on RenderingDevice renderers.
++	if RenderingServer.get_rendering_device() != null:
++		post_transparent_texture = Texture2DRD.new()
++		material_override.set_shader_parameter("depth_post_transparent_texture", post_transparent_texture)
++		if fractal_sky.visible:
++			fractal_sky.material_override.set_shader_parameter("depth_post_transparent_texture", post_transparent_texture)
++
+ 
+ 	Ref.sun_box.material_override.set_shader_parameter("depth_post_transparent_texture", post_transparent_texture)
+ 
+@@ -103,7 +106,8 @@
+ 	Ref.sun_box.material_override.set_shader_parameter("fog_start", fog_start)
+ 	Ref.sun_box.material_override.set_shader_parameter("fog_power", fog_power)
+ 
+-	Ref.player_camera.compositor.compositor_effects[0].depth_texture_recreated.connect(_on_depth_texture_recreated)
++	if RenderingServer.get_rendering_device() != null:
++		Ref.player_camera.compositor.compositor_effects[0].depth_texture_recreated.connect(_on_depth_texture_recreated)
+ 
+ 
+ func _on_depth_texture_recreated(texture: RID) -> void :
+@@ -143,7 +147,7 @@
+ func _process(delta: float) -> void :
+ 	var real_fog_max: float = 22
+ 	if Ref.world.instance_radius < 192:
+-		fog_start = Ref.world.instance_radius - 46
++		fog_start = maxf(4.0, Ref.world.instance_radius - 46)
+ 	else:
+ 		fog_start = 192
+ 		real_fog_max = Ref.world.instance_radius - 192 + 48

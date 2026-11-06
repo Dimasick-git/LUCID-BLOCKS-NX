@@ -1,0 +1,164 @@
+--- a/extension/include/chunk.h
++++ b/extension/include/chunk.h
+@@ -3,6 +3,8 @@
+ 
+ #include "macros.h"
+ #include <vector>
++#include <godot_cpp/classes/array_mesh.hpp>
++#include <godot_cpp/classes/physics_server3d.hpp>
+ 
+ #include "block.h"
+ #include "decoration.h"
+--- a/extension/src/chunk.cpp
++++ b/extension/src/chunk.cpp
+@@ -415,6 +415,17 @@
+     empty["faces"] = PackedVector3Array();
+     empty["backface_collision"] = false;
+     ps->shape_set_data(collision_shape, empty);
++#ifdef __SWITCH__
++    // This method is used only when World unloads a chunk.
++    set_mesh(Ref<Mesh>());
++    foliage_mesh->set_mesh(Ref<Mesh>());
++    water_mesh->set_mesh(Ref<Mesh>());
++    water_mesh_surface->set_mesh(Ref<Mesh>());
++    opaque_mesh_data.clear(); transparent_mesh_data.clear(); foliage_mesh_data.clear();
++    collision_vertices.clear(); water_mesh_data.unref(); water_surface_mesh_data.unref();
++    std::vector<Vector3>().swap(vertices); std::vector<Vector3>().swap(normals);
++    std::vector<Vector2>().swap(uvs); std::vector<Vector2>().swap(uvs2);
++#endif
+ }
+ 
+ // Keep track of block count and other state
+@@ -475,6 +486,11 @@
+ 
+     foliage_mesh->set_mesh(foliage_array_mesh);
+     set_mesh(main_array_mesh);
++#ifdef __SWITCH__
++    // Uploaded meshes and PhysicsServer own the data now; release staging arrays.
++    opaque_mesh_data.clear(); transparent_mesh_data.clear(); foliage_mesh_data.clear();
++    collision_vertices.clear();
++#endif
+ }
+ 
+ void Chunk::finalize_water_mesh_loading() {
+@@ -482,7 +498,11 @@
+ }
+ 
+ void Chunk::finalize_water_surface_mesh_loading() {
+-    water_mesh_surface->set_mesh(water_surface_mesh_data); 
++    water_mesh_surface->set_mesh(water_surface_mesh_data);
++#ifdef __SWITCH__
++    std::vector<Vector3>().swap(vertices); std::vector<Vector3>().swap(normals);
++    std::vector<Vector2>().swap(uvs); std::vector<Vector2>().swap(uvs2);
++#endif 
+ }
+ 
+ // Add all cross-faces for foliage to our mesh
+--- a/extension/src/world.cpp
++++ b/extension/src/world.cpp
+@@ -535,6 +535,10 @@
+                 continue;
+             }
+ 
++#ifdef __SWITCH__
++            // Keep only four CPU meshes awaiting GPU/collision finalization.
++            if (init_queue.size() >= 4) continue;
++#endif
+             Chunk* new_chunk = available_chunks.back();
+             available_chunks.pop_back();
+ 
+@@ -679,23 +683,30 @@
+ }
+ 
+ void World::simulate_dynamic() {
+-    int64_t chunk_radius_x = water_simulate_radius / Chunk::CHUNK_SIZE_X;
+-    int64_t chunk_radius_y = water_simulate_radius / Chunk::CHUNK_SIZE_Y;
+-    int64_t chunk_radius_z = water_simulate_radius / Chunk::CHUNK_SIZE_Z;
++#ifdef __SWITCH__
++    // Unloaded chunks cannot simulate; avoid scanning the 64-block cube when
++    // the loaded region is smaller (32-block profile: 250 vs 1458 lookups).
++    const int64_t simulation_radius = water_simulate_radius < instance_radius ? water_simulate_radius : instance_radius;
++#else
++    const int64_t simulation_radius = water_simulate_radius;
++#endif
++    int64_t chunk_radius_x = simulation_radius / Chunk::CHUNK_SIZE_X;
++    int64_t chunk_radius_y = simulation_radius / Chunk::CHUNK_SIZE_Y;
++    int64_t chunk_radius_z = simulation_radius / Chunk::CHUNK_SIZE_Z;
+ 
+     // First, advance the water + fire simulation of all chunks in range
+     simulated_water_subchunks = 0;
+     int simulated_chunks = 0;
+     int rendered_chunks = 0;
+-    for (int64_t chunk_y = 0; chunk_y <= 2 * water_simulate_radius / Chunk::CHUNK_SIZE_Y; chunk_y++) {
++    for (int64_t chunk_y = 0; chunk_y <= 2 * simulation_radius / Chunk::CHUNK_SIZE_Y; chunk_y++) {
+         int64_t actual_chunk_y = (chunk_y % 2 == 0) ? -chunk_y / 2 : (chunk_y + 1) / 2;
+         if ((water_direction / 2) % 2) actual_chunk_y = -actual_chunk_y;
+ 
+-    for (int64_t chunk_x = 0; chunk_x <= 2 * water_simulate_radius / Chunk::CHUNK_SIZE_X; chunk_x++) {
++    for (int64_t chunk_x = 0; chunk_x <= 2 * simulation_radius / Chunk::CHUNK_SIZE_X; chunk_x++) {
+         int64_t actual_chunk_x = (chunk_x % 2 == 0) ? -chunk_x / 2 : (chunk_x + 1) / 2;
+         if (water_direction % 2) actual_chunk_x = -actual_chunk_x;
+ 
+-    for (int64_t chunk_z = 0; chunk_z <= 2 * water_simulate_radius / Chunk::CHUNK_SIZE_Z; chunk_z++) {
++    for (int64_t chunk_z = 0; chunk_z <= 2 * simulation_radius / Chunk::CHUNK_SIZE_Z; chunk_z++) {
+         int64_t actual_chunk_z = (chunk_z % 2 == 0) ? -chunk_z / 2 : (chunk_z + 1) / 2;
+         if ((water_direction / 4) % 2) actual_chunk_z = -actual_chunk_z;
+ 
+@@ -705,7 +716,7 @@
+             Chunk::CHUNK_SIZE_Z * actual_chunk_z) + center_chunk;
+ 
+         // Simulate chunks in a staggered way to reduce load each frame
+-        if ((int64_t) UtilityFunctions::abs(chunk_x + chunk_y + chunk_x) % WATER_SKIP != water_frame) {
++        if ((int64_t) UtilityFunctions::abs(chunk_x + chunk_y + chunk_z) % WATER_SKIP != water_frame) {
+             continue;
+         }
+ 
+@@ -714,7 +725,7 @@
+             continue;
+         }
+ 
+-        if (!is_chunk_loaded.has(coordinate) || !is_chunk_loaded[coordinate] || !is_chunk_in_radius(coordinate, water_simulate_radius)) {
++        if (!is_chunk_loaded.has(coordinate) || !is_chunk_loaded[coordinate] || !is_chunk_in_radius(coordinate, simulation_radius)) {
+             continue;
+         }
+ 
+@@ -729,15 +740,15 @@
+     // Then, render any updated chunks +
+     // Render all fire / water surfaces of chunks that were recently loaded
+     rendered_water_chunks = 0;
+-    for (int64_t chunk_y = 0; chunk_y <= 2 * water_simulate_radius / Chunk::CHUNK_SIZE_Y; chunk_y++) {
++    for (int64_t chunk_y = 0; chunk_y <= 2 * simulation_radius / Chunk::CHUNK_SIZE_Y; chunk_y++) {
+         int64_t actual_chunk_y = (chunk_y % 2 == 0) ? -chunk_y / 2 : (chunk_y + 1) / 2;
+         if ((water_direction / 2) % 2) actual_chunk_y = -actual_chunk_y;
+ 
+-    for (int64_t chunk_x = 0; chunk_x <= 2 * water_simulate_radius / Chunk::CHUNK_SIZE_X; chunk_x++) {
++    for (int64_t chunk_x = 0; chunk_x <= 2 * simulation_radius / Chunk::CHUNK_SIZE_X; chunk_x++) {
+         int64_t actual_chunk_x = (chunk_x % 2 == 0) ? -chunk_x / 2 : (chunk_x + 1) / 2;
+         if (water_direction % 2) actual_chunk_x = -actual_chunk_x;
+ 
+-    for (int64_t chunk_z = 0; chunk_z <= 2 * water_simulate_radius / Chunk::CHUNK_SIZE_Z; chunk_z++) {
++    for (int64_t chunk_z = 0; chunk_z <= 2 * simulation_radius / Chunk::CHUNK_SIZE_Z; chunk_z++) {
+         int64_t actual_chunk_z = (chunk_z % 2 == 0) ? -chunk_z / 2 : (chunk_z + 1) / 2;
+         if ((water_direction / 4) % 2) actual_chunk_z = -actual_chunk_z;
+ 
+@@ -746,7 +757,7 @@
+             Chunk::CHUNK_SIZE_Y * actual_chunk_y,
+             Chunk::CHUNK_SIZE_Z * actual_chunk_z) + center_chunk;
+ 
+-        if (!is_chunk_loaded.has(coordinate) || !is_chunk_loaded[coordinate] || !is_chunk_in_radius(coordinate, water_simulate_radius)) {
++        if (!is_chunk_loaded.has(coordinate) || !is_chunk_loaded[coordinate] || !is_chunk_in_radius(coordinate, simulation_radius)) {
+             continue;
+         }
+ 
+@@ -1535,7 +1546,11 @@
+ 
+ 
+ void World::set_instance_radius(int64_t new_radius) {
++    #ifdef __SWITCH__
++    instance_radius = UtilityFunctions::clampi(new_radius, 32, 64);
++#else
+     instance_radius = UtilityFunctions::clampi(new_radius, 48, 1024);
++#endif
+ }
+ 
+ void World::refresh_instance_radius() {

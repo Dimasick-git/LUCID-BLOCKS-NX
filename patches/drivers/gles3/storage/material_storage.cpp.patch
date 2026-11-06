@@ -1,0 +1,154 @@
+--- a/drivers/gles3/storage/material_storage.cpp
++++ b/drivers/gles3/storage/material_storage.cpp
+@@ -1163,19 +1163,35 @@
+ 	static_assert(sizeof(GlobalShaderUniforms::Value) == 16);
+ 
+ 	global_shader_uniforms.buffer_size = MAX(16, (int)GLOBAL_GET("rendering/limits/global_shader_variables/buffer_size"));
++#ifdef HORIZON_ENABLED
++    global_shader_uniforms.buffer_size = CLAMP((global_shader_uniforms.buffer_size + 255u) & ~255u, 4096u, 262144u);
++#else
+ 	if (global_shader_uniforms.buffer_size * sizeof(GlobalShaderUniforms::Value) > uint32_t(Config::get_singleton()->max_uniform_buffer_size)) {
+ 		// Limit to maximum support UBO size.
+ 		global_shader_uniforms.buffer_size = uint32_t(Config::get_singleton()->max_uniform_buffer_size) / sizeof(GlobalShaderUniforms::Value);
+ 	}
+ 
++#endif
+ 	global_shader_uniforms.buffer_values = memnew_arr(GlobalShaderUniforms::Value, global_shader_uniforms.buffer_size);
+ 	memset(global_shader_uniforms.buffer_values, 0, sizeof(GlobalShaderUniforms::Value) * global_shader_uniforms.buffer_size);
+ 	global_shader_uniforms.buffer_usage = memnew_arr(GlobalShaderUniforms::ValueUsage, global_shader_uniforms.buffer_size);
+ 	global_shader_uniforms.buffer_dirty_regions = memnew_arr(bool, 1 + (global_shader_uniforms.buffer_size / GlobalShaderUniforms::BUFFER_DIRTY_REGION_SIZE));
+ 	memset(global_shader_uniforms.buffer_dirty_regions, 0, sizeof(bool) * (1 + (global_shader_uniforms.buffer_size / GlobalShaderUniforms::BUFFER_DIRTY_REGION_SIZE)));
+-	glGenBuffers(1, &global_shader_uniforms.buffer);
++	#ifdef HORIZON_ENABLED
++    glGenTextures(1, &global_shader_uniforms.buffer);
++    glActiveTexture(GL_TEXTURE0 + Config::get_singleton()->max_texture_image_units - 1);
++    glBindTexture(GL_TEXTURE_2D, global_shader_uniforms.buffer);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32UI, 256, global_shader_uniforms.buffer_size / 256, 0, GL_RGBA_INTEGER, GL_UNSIGNED_INT, global_shader_uniforms.buffer_values);
++    glActiveTexture(GL_TEXTURE0);
++#else
++    glGenBuffers(1, &global_shader_uniforms.buffer);
+ 	glBindBuffer(GL_UNIFORM_BUFFER, global_shader_uniforms.buffer);
+ 	glBufferData(GL_UNIFORM_BUFFER, sizeof(GlobalShaderUniforms::Value) * global_shader_uniforms.buffer_size, nullptr, GL_DYNAMIC_DRAW);
++#endif
+ 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+ 
+ 	{
+@@ -1245,7 +1261,11 @@
+ 		actions.render_mode_defines["light_only"] = "#define MODE_LIGHT_ONLY\n";
+ 		actions.render_mode_defines["world_vertex_coords"] = "#define USE_WORLD_VERTEX_COORDS\n";
+ 
+-		actions.global_buffer_array_variable = "global_shader_uniforms";
++		#ifdef HORIZON_ENABLED
++        actions.global_buffer_array_variable = "lucid_global_uniform";
++#else
++        actions.global_buffer_array_variable = "global_shader_uniforms";
++#endif
+ 		actions.instance_uniform_index_variable = "read_draw_data_instance_offset";
+ 
+ 		shaders.compiler_canvas.initialize(actions);
+@@ -1447,7 +1467,11 @@
+ 
+ 		actions.apply_luminance_multiplier = true; // apply luminance multiplier to screen texture
+ 		actions.check_multiview_samplers = RasterizerGLES3::get_singleton()->is_xr_enabled();
+-		actions.global_buffer_array_variable = "global_shader_uniforms";
++		#ifdef HORIZON_ENABLED
++        actions.global_buffer_array_variable = "lucid_global_uniform";
++#else
++        actions.global_buffer_array_variable = "global_shader_uniforms";
++#endif
+ 		actions.instance_uniform_index_variable = "instance_offset";
+ 
+ 		shaders.compiler_scene.initialize(actions);
+@@ -1511,7 +1535,11 @@
+ 		actions.default_filter = ShaderLanguage::FILTER_LINEAR_MIPMAP;
+ 		actions.default_repeat = ShaderLanguage::REPEAT_ENABLE;
+ 
+-		actions.global_buffer_array_variable = "global_shader_uniforms";
++		#ifdef HORIZON_ENABLED
++        actions.global_buffer_array_variable = "lucid_global_uniform";
++#else
++        actions.global_buffer_array_variable = "global_shader_uniforms";
++#endif
+ 
+ 		shaders.compiler_particles.initialize(actions);
+ 	}
+@@ -1566,7 +1594,11 @@
+ 		actions.default_filter = ShaderLanguage::FILTER_LINEAR_MIPMAP;
+ 		actions.default_repeat = ShaderLanguage::REPEAT_ENABLE;
+ 
+-		actions.global_buffer_array_variable = "global_shader_uniforms";
++		#ifdef HORIZON_ENABLED
++        actions.global_buffer_array_variable = "lucid_global_uniform";
++#else
++        actions.global_buffer_array_variable = "global_shader_uniforms";
++#endif
+ 
+ 		shaders.compiler_sky.initialize(actions);
+ 	}
+@@ -1600,7 +1632,11 @@
+ 	memdelete_arr(global_shader_uniforms.buffer_values);
+ 	memdelete_arr(global_shader_uniforms.buffer_usage);
+ 	memdelete_arr(global_shader_uniforms.buffer_dirty_regions);
+-	glDeleteBuffers(1, &global_shader_uniforms.buffer);
++	#ifdef HORIZON_ENABLED
++    glDeleteTextures(1, &global_shader_uniforms.buffer);
++#else
++    glDeleteBuffers(1, &global_shader_uniforms.buffer);
++#endif
+ 
+ 	singleton = nullptr;
+ }
+@@ -2175,8 +2211,40 @@
+ 	_global_shader_uniform_mark_buffer_dirty(pos, 1);
+ }
+ 
++void MaterialStorage::bind_global_shader_parameters() const {
++#ifdef HORIZON_ENABLED
++    int unit = Config::get_singleton()->max_texture_image_units - 1;
++    glActiveTexture(GL_TEXTURE0 + unit);
++    glBindSampler(unit, 0);
++    glBindTexture(GL_TEXTURE_2D, global_shader_uniforms.buffer);
++    glActiveTexture(GL_TEXTURE0);
++#endif
++}
++
+ void MaterialStorage::_update_global_shader_uniforms() {
+ 	MaterialStorage *material_storage = MaterialStorage::get_singleton();
++#ifdef HORIZON_ENABLED
++    if (global_shader_uniforms.buffer_dirty_region_count > 0) {
++        bind_global_shader_parameters();
++        glActiveTexture(GL_TEXTURE0 + Config::get_singleton()->max_texture_image_units - 1);
++        const uint32_t rows = global_shader_uniforms.buffer_size / 256;
++        const uint32_t regions = (global_shader_uniforms.buffer_size + GlobalShaderUniforms::BUFFER_DIRTY_REGION_SIZE - 1) / GlobalShaderUniforms::BUFFER_DIRTY_REGION_SIZE;
++        if (global_shader_uniforms.buffer_dirty_region_count * 4 >= regions) {
++            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, rows, GL_RGBA_INTEGER, GL_UNSIGNED_INT, global_shader_uniforms.buffer_values);
++        } else {
++            for (uint32_t i = 0; i < regions; i++) {
++                if (!global_shader_uniforms.buffer_dirty_regions[i]) continue;
++                uint32_t first = i * GlobalShaderUniforms::BUFFER_DIRTY_REGION_SIZE;
++                uint32_t length = MIN((uint32_t)GlobalShaderUniforms::BUFFER_DIRTY_REGION_SIZE, global_shader_uniforms.buffer_size - first);
++                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, first / 256, 256, length / 256, GL_RGBA_INTEGER, GL_UNSIGNED_INT, global_shader_uniforms.buffer_values + first);
++            }
++        }
++        memset(global_shader_uniforms.buffer_dirty_regions, 0, sizeof(bool) * (1 + global_shader_uniforms.buffer_size / GlobalShaderUniforms::BUFFER_DIRTY_REGION_SIZE));
++        global_shader_uniforms.buffer_dirty_region_count = 0;
++        glActiveTexture(GL_TEXTURE0);
++    }
++#else
++
+ 	if (global_shader_uniforms.buffer_dirty_region_count > 0) {
+ 		uint32_t total_regions = 1 + (global_shader_uniforms.buffer_size / GlobalShaderUniforms::BUFFER_DIRTY_REGION_SIZE);
+ 		if (total_regions / global_shader_uniforms.buffer_dirty_region_count <= 4) {
+@@ -2199,6 +2267,8 @@
+ 
+ 		global_shader_uniforms.buffer_dirty_region_count = 0;
+ 	}
++
++#endif
+ 
+ 	if (global_shader_uniforms.must_update_buffer_materials) {
+ 		// only happens in the case of a buffer variable added or removed,

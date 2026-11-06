@@ -1,0 +1,41 @@
+--- a/platform/switch/display_server_switch.cpp
++++ b/platform/switch/display_server_switch.cpp
+@@ -59,6 +59,8 @@
+ }
+ 
+ void DisplayServerSwitch::_dispatch_input_event(const Ref<InputEvent> &p_event) {
++    Ref<InputEventMouse> mouse = p_event;
++    if (mouse.is_valid()) mouse_position = mouse->get_position();
+ 	if (input_event_callback.is_valid()) {
+ 		input_event_callback.call(p_event);
+ 	}
+@@ -66,7 +68,8 @@
+ 
+ bool DisplayServerSwitch::has_feature(DisplayServerEnums::Feature p_feature) const {
+ 	switch (p_feature) {
+-		case DisplayServerEnums::FEATURE_TOUCHSCREEN:
++		case DisplayServerEnums::FEATURE_MOUSE:
++        case DisplayServerEnums::FEATURE_TOUCHSCREEN:
+ 			return true;
+ 		default:
+ 			return false;
+@@ -362,3 +365,19 @@
+ 		native_menu = nullptr;
+ 	}
+ }
++
++void DisplayServerSwitch::warp_mouse(const Point2i &p_position) {
++    Point2i next = p_position.clamp(Point2i(), window_size - Size2i(1, 1));
++    Point2i relative = next - mouse_position;
++    mouse_position = next;
++    Ref<InputEventMouseMotion> motion;
++    motion.instantiate();
++    motion->set_window_id(DisplayServerEnums::MAIN_WINDOW_ID);
++    motion->set_device(-1);
++    motion->set_position(next);
++    motion->set_global_position(next);
++    motion->set_relative(relative);
++    motion->set_relative_screen_position(relative);
++    motion->set_button_mask(Input::get_singleton()->get_mouse_button_mask());
++    Input::get_singleton()->parse_input_event(motion);
++}

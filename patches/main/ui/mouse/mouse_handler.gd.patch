@@ -1,0 +1,64 @@
+--- a/main/ui/mouse/mouse_handler.gd
++++ b/main/ui/mouse/mouse_handler.gd
+@@ -32,7 +32,20 @@
+ var scroll_timer: float = 0.0
+ var mouse_sensitivity: float = 600
+ 
++var nx_cursor: TextureRect
++
+ func _ready() -> void :
++	if OS.has_feature("switch"):
++		var layer := CanvasLayer.new()
++		layer.layer = 1000
++		add_child(layer)
++		nx_cursor = TextureRect.new()
++		nx_cursor.mouse_filter = Control.MOUSE_FILTER_IGNORE
++		nx_cursor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
++		layer.add_child(nx_cursor)
++		window_focused = true
++		_nx_menu_buttons()
++
+ 	print("Running Steam Deck: ", is_steam_deck())
+ 	Ref.main.window_focused.connect(_on_window_focused)
+ 	Ref.main.window_unfocused.connect(_on_window_unfocused)
+@@ -90,6 +103,11 @@
+ 	if size_changed:
+ 		update_mouse_textures()
+ 	Input.set_custom_mouse_cursor(pressed_cursor_resized if clicked else default_cursor_resized, Input.CURSOR_ARROW, resized_hotspot)
++	if is_instance_valid(nx_cursor):
++		var image: Image = pressed_cursor_resized if clicked else default_cursor_resized
++		nx_cursor.texture = ImageTexture.create_from_image(image)
++		nx_cursor.size = image.get_size()
++
+ 
+ 
+ func _input(event: InputEvent) -> void :
+@@ -130,6 +148,12 @@
+ 
+ 
+ func _process(delta: float) -> void :
++	if is_instance_valid(nx_cursor):
++		nx_cursor.visible = not captured and window_focused
++		var screen_scale: Vector2 = get_viewport().get_screen_transform().get_scale().max(Vector2(0.001, 0.001))
++		nx_cursor.scale = Vector2.ONE / screen_scale
++		nx_cursor.position = get_viewport().get_mouse_position() - resized_hotspot * nx_cursor.scale
++
+ 	if captured or not window_focused:
+ 		return
+ 
+@@ -168,3 +192,15 @@
+ 
+ func is_steam_deck() -> bool:
+ 	return OS.has_feature("linux") and OS.has_environment("SteamDeck")
++
++func _nx_menu_buttons() -> void:
++	for action in ["ui_accept", "mouse_simulate", "ui_cancel", "back"]:
++		if not InputMap.has_action(action):
++			continue
++		for event in InputMap.action_get_events(action):
++			if event is InputEventJoypadButton:
++				InputMap.action_erase_event(action, event)
++		var button := InputEventJoypadButton.new()
++		button.device = -1
++		button.button_index = JOY_BUTTON_B if action in ["ui_accept", "mouse_simulate"] else JOY_BUTTON_A
++		InputMap.action_add_event(action, button)

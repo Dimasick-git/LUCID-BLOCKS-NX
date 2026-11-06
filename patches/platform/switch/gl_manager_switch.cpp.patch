@@ -1,0 +1,21 @@
+--- a/platform/switch/gl_manager_switch.cpp
++++ b/platform/switch/gl_manager_switch.cpp
+@@ -11,6 +11,9 @@
+ 
+ #include <stdio.h>
+ #include "switch_wrapper.h"
++extern "C" {
++#include "nx_salty.h"
++}
+ 
+ Error GLManagerSwitch::initialize() {
+ 	display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+@@ -103,7 +106,7 @@
+ }
+ 
+ void GLManagerSwitch::swap_buffers() {
+-	eglSwapBuffers(display, surface);
++	if (eglSwapBuffers(display, surface)) nx_salty_present(armGetSystemTick());
+ }
+ 
+ void GLManagerSwitch::set_use_vsync(bool p_use) {

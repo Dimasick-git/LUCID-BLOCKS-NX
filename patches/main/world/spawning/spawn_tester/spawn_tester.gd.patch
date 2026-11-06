@@ -1,0 +1,13 @@
+--- a/main/world/spawning/spawn_tester/spawn_tester.gd
++++ b/main/world/spawning/spawn_tester/spawn_tester.gd
+@@ -7,6 +7,10 @@
+ @export var initial_height: int = 100
+ 
+ 
++
++func _ready() -> void:
++	if OS.has_feature("switch"):
++		test_instance_radius = 48 # Preserve the original spawn search vertical coverage.
+ 
+ func find_spawn_position(initial_offset: Vector3 = Vector3(), dimension: LucidBlocksWorld.Dimension = LucidBlocksWorld.Dimension.NARAKA, walk_scale: float = 1.0) -> bool:
+ 	if dimension == LucidBlocksWorld.Dimension.POCKET:

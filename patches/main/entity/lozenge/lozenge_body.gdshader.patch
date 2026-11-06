@@ -1,0 +1,22 @@
+--- a/main/entity/lozenge/lozenge_body.gdshader
++++ b/main/entity/lozenge/lozenge_body.gdshader
+@@ -1,4 +1,10 @@
+ // NOTE: Shader automatically converted from Godot Engine 4.6.stable.double's StandardMaterial3D.
++
++#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
++#define NX_EYE_OFFSET vec3(0.0)
++#else
++#define NX_EYE_OFFSET EYE_OFFSET
++#endif
+ 
+ shader_type spatial;
+ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
+@@ -41,7 +47,7 @@
+ 
+ 	{
+ 		// Height: Enabled
+-		vec3 view_dir = normalize(normalize(-VERTEX + EYE_OFFSET) * mat3(TANGENT * heightmap_flip.x, -BINORMAL * heightmap_flip.y, NORMAL));
++		vec3 view_dir = normalize(normalize(-VERTEX + NX_EYE_OFFSET) * mat3(TANGENT * heightmap_flip.x, -BINORMAL * heightmap_flip.y, NORMAL));
+ 
+ 		// Height Deep Parallax: Enabled
+ 		float num_layers = mix(float(heightmap_max_layers), float(heightmap_min_layers), abs(dot(vec3(0.0, 0.0, 1.0), view_dir)));

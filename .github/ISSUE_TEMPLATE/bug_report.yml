@@ -1,0 +1,29 @@
+name: Баг или просадка производительности
+description: Сбой запуска, графики, управления или FPS.
+title: "[NSP01] "
+labels: [bug]
+body:
+  - type: input
+    id: build
+    attributes:
+      label: Сборка
+      placeholder: 0.1.0-nsp01
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Что произошло
+      description: Место в игре, последовательность действий, ожидаемый и фактический результат.
+    validations:
+      required: true
+  - type: textarea
+    id: system
+    attributes:
+      label: Консоль и настройки
+      description: Модель Switch, handheld/docked, дальность и масштаб рендера, частоты или отсутствие разгона.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Лог и материалы
+      description: Приложи boot.log, снимок или видео. При вылете — свежий atmosphere/crash_reports. Ключи и личные сохранения не нужны.

@@ -1,0 +1,30 @@
+--- a/platform/switch/display_server_switch.h
++++ b/platform/switch/display_server_switch.h
+@@ -37,6 +37,10 @@
+ 	NativeMenu *native_menu = nullptr;
+ 
+ 	Size2i window_size = Size2i(1280, 720);
++    Point2i mouse_position = Point2i(640, 360);
++    DisplayServerEnums::MouseMode mouse_mode = DisplayServerEnums::MOUSE_MODE_VISIBLE;
++    DisplayServerEnums::MouseMode mouse_override_mode = DisplayServerEnums::MOUSE_MODE_VISIBLE;
++    bool mouse_override_enabled = false;
+ 
+ 	Callable input_event_callback;
+ 	Callable rect_changed_callback;
+@@ -149,10 +153,12 @@
+ 	void tts_resume() override {}
+ 	void tts_stop() override {}
+ 
+-	void mouse_set_mode(DisplayServerEnums::MouseMode p_mode) override {}
+-	void mouse_set_mode_override(DisplayServerEnums::MouseMode p_mode) override {}
+-	void mouse_set_mode_override_enabled(bool p_override_enabled) override {}
+-	Point2i mouse_get_position() const override { return Point2i(); }
++	void mouse_set_mode(DisplayServerEnums::MouseMode p_mode) override { mouse_mode = p_mode; }
++    DisplayServerEnums::MouseMode mouse_get_mode() const override { return mouse_override_enabled ? mouse_override_mode : mouse_mode; }
++    void warp_mouse(const Point2i &p_position) override;
++	void mouse_set_mode_override(DisplayServerEnums::MouseMode p_mode) override { mouse_override_mode = p_mode; }
++	void mouse_set_mode_override_enabled(bool p_override_enabled) override { mouse_override_enabled = p_override_enabled; }
++	Point2i mouse_get_position() const override { return mouse_position; }
+ 	void clipboard_set(const String &p_text) override {}
+ 	void clipboard_set_primary(const String &p_text) override {}
+ 

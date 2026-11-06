@@ -1,0 +1,11 @@
+Import("env")
+import os
+from pathlib import Path
+from SCons.Errors import UserError
+build = Path(os.environ.get("LUCID_NX_BUILD_ROOT", "C:/Users/dimas/lucid-build"))
+archives = [build / "native/libgdblocks.switch.template_release.double.arm64.a",
+    build / "upstream-gdblocks/godot-cpp/bin/libgodot-cpp.switch.template_release.double.arm64.a"]
+for archive in archives:
+    if not archive.is_file(): raise UserError("Missing native archive: " + str(archive))
+env.add_source_files(env.modules_sources, "register_types.cpp")
+env.Append(LIBS=[env.File(str(archive)) for archive in archives])

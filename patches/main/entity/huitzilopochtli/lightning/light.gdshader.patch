@@ -1,0 +1,13 @@
+--- a/main/entity/huitzilopochtli/lightning/light.gdshader
++++ b/main/entity/huitzilopochtli/lightning/light.gdshader
+@@ -27,6 +27,10 @@
+ 
+ 	// Sample depth buffer
+ 	vec3 scene_clip_pos = vec3(SCREEN_UV * 2.0 - 1.0, texture(depth_texture, SCREEN_UV).r);
++	// NX: OpenGL depth is reconstructed in the -1..1 clip range.
++#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
++	scene_clip_pos.z = scene_clip_pos.z * 2.0 - 1.0;
++#endif
+ 	vec4 scene_view_pos = INV_PROJECTION_MATRIX * vec4(scene_clip_pos, 1.0);
+ 	scene_view_pos.xyz /= scene_view_pos.w;
+ 

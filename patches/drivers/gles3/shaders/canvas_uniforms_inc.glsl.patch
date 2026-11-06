@@ -1,0 +1,19 @@
+--- a/drivers/gles3/shaders/canvas_uniforms_inc.glsl
++++ b/drivers/gles3/shaders/canvas_uniforms_inc.glsl
+@@ -28,9 +28,16 @@
+ #define BATCH_FLAGS_DEFAULT_NORMAL_MAP_USED uint(1 << 9)
+ #define BATCH_FLAGS_DEFAULT_SPECULAR_MAP_USED uint(1 << 10)
+ 
++#ifdef LUCID_NX_GLOBAL_TEXTURE
++uniform highp usampler2D lucid_global_values; // texunit:-1
++vec4 lucid_global_uniform(uint index) {
++    return uintBitsToFloat(texelFetch(lucid_global_values, ivec2(int(index & 255u), int(index >> 8u)), 0));
++}
++#else
+ layout(std140) uniform GlobalShaderUniformData { //ubo:1
+ 	vec4 global_shader_uniforms[MAX_GLOBAL_SHADER_UNIFORMS];
+ };
++#endif
+ 
+ layout(std140) uniform CanvasData { //ubo:0
+ 	mat4 canvas_transform;

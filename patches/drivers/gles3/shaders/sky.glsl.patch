@@ -1,0 +1,19 @@
+--- a/drivers/gles3/shaders/sky.glsl
++++ b/drivers/gles3/shaders/sky.glsl
+@@ -52,9 +52,16 @@
+ uniform sampler2D quarter_res; //texunit:-3
+ #endif
+ 
++#ifdef LUCID_NX_GLOBAL_TEXTURE
++uniform highp usampler2D lucid_global_values; // texunit:-1
++vec4 lucid_global_uniform(uint index) {
++    return uintBitsToFloat(texelFetch(lucid_global_values, ivec2(int(index & 255u), int(index >> 8u)), 0));
++}
++#else
+ layout(std140) uniform GlobalShaderUniformData { //ubo:1
+ 	vec4 global_shader_uniforms[MAX_GLOBAL_SHADER_UNIFORMS];
+ };
++#endif
+ 
+ struct DirectionalLightData {
+ 	vec4 direction_energy;

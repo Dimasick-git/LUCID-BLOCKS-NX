@@ -1,0 +1,19 @@
+--- a/drivers/gles3/shaders/particles.glsl
++++ b/drivers/gles3/shaders/particles.glsl
+@@ -17,9 +17,16 @@
+ 
+ #define SDF_MAX_LENGTH 16384.0
+ 
++#ifdef LUCID_NX_GLOBAL_TEXTURE
++uniform highp usampler2D lucid_global_values; // texunit:-1
++vec4 lucid_global_uniform(uint index) {
++    return uintBitsToFloat(texelFetch(lucid_global_values, ivec2(int(index & 255u), int(index >> 8u)), 0));
++}
++#else
+ layout(std140) uniform GlobalShaderUniformData { //ubo:1
+ 	vec4 global_shader_uniforms[MAX_GLOBAL_SHADER_UNIFORMS];
+ };
++#endif
+ 
+ // This needs to be outside clang-format so the ubo comment is in the right place
+ #ifdef MATERIAL_UNIFORMS_USED

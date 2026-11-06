@@ -1,0 +1,22 @@
+--- a/main/entity/blasphemy/model/metal.gdshader
++++ b/main/entity/blasphemy/model/metal.gdshader
+@@ -1,4 +1,10 @@
+ shader_type spatial;
++
++#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
++#define NX_EYE_OFFSET vec3(0.0)
++#else
++#define NX_EYE_OFFSET EYE_OFFSET
++#endif
+ 
+ varying vec3 worldPos;
+ varying vec3 worldNormal;
+@@ -30,7 +36,7 @@
+ void vertex() {
+ 	worldNormal = (MODEL_NORMAL_MATRIX * NORMAL);
+ 	worldPos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+-	worldEye = (INV_VIEW_MATRIX * vec4(EYE_OFFSET, 1.0)).xyz;
++	worldEye = (INV_VIEW_MATRIX * vec4(NX_EYE_OFFSET, 1.0)).xyz;
+ 	tex_position = TIME * 0.01 + VERTEX.xz / 2.0 + VERTEX.y;
+ 	float height = texture(displacement, tex_position).x;
+ 	VERTEX = VERTEX * (1.0 - attack) + attack * VERTEX * height * attack_scale;

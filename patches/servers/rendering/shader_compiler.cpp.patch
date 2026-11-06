@@ -1,0 +1,89 @@
+--- a/servers/rendering/shader_compiler.cpp
++++ b/servers/rendering/shader_compiler.cpp
+@@ -383,63 +383,67 @@
+ }
+ 
+ static String _get_global_shader_uniform_from_type_and_index(const String &p_buffer, const String &p_index, ShaderLanguage::DataType p_type) {
++    auto read = [&](uint32_t offset) -> String {
++        String index = p_index + (offset ? "+" + itos(offset) + "u" : "");
++        return p_buffer == "lucid_global_uniform" ? p_buffer + "(" + index + ")" : p_buffer + "[" + index + "]";
++    };
+ 	switch (p_type) {
+ 		case ShaderLanguage::TYPE_BOOL: {
+-			return "bool(floatBitsToUint(" + p_buffer + "[" + p_index + "].x))";
++			return "bool(floatBitsToUint(" + read(0) + ".x))";
+ 		}
+ 		case ShaderLanguage::TYPE_BVEC2: {
+-			return "bvec2(floatBitsToUint(" + p_buffer + "[" + p_index + "].xy))";
++			return "bvec2(floatBitsToUint(" + read(0) + ".xy))";
+ 		}
+ 		case ShaderLanguage::TYPE_BVEC3: {
+-			return "bvec3(floatBitsToUint(" + p_buffer + "[" + p_index + "].xyz))";
++			return "bvec3(floatBitsToUint(" + read(0) + ".xyz))";
+ 		}
+ 		case ShaderLanguage::TYPE_BVEC4: {
+-			return "bvec4(floatBitsToUint(" + p_buffer + "[" + p_index + "].xyzw))";
++			return "bvec4(floatBitsToUint(" + read(0) + ".xyzw))";
+ 		}
+ 		case ShaderLanguage::TYPE_INT: {
+-			return "floatBitsToInt(" + p_buffer + "[" + p_index + "].x)";
++			return "floatBitsToInt(" + read(0) + ".x)";
+ 		}
+ 		case ShaderLanguage::TYPE_IVEC2: {
+-			return "floatBitsToInt(" + p_buffer + "[" + p_index + "].xy)";
++			return "floatBitsToInt(" + read(0) + ".xy)";
+ 		}
+ 		case ShaderLanguage::TYPE_IVEC3: {
+-			return "floatBitsToInt(" + p_buffer + "[" + p_index + "].xyz)";
++			return "floatBitsToInt(" + read(0) + ".xyz)";
+ 		}
+ 		case ShaderLanguage::TYPE_IVEC4: {
+-			return "floatBitsToInt(" + p_buffer + "[" + p_index + "].xyzw)";
++			return "floatBitsToInt(" + read(0) + ".xyzw)";
+ 		}
+ 		case ShaderLanguage::TYPE_UINT: {
+-			return "floatBitsToUint(" + p_buffer + "[" + p_index + "].x)";
++			return "floatBitsToUint(" + read(0) + ".x)";
+ 		}
+ 		case ShaderLanguage::TYPE_UVEC2: {
+-			return "floatBitsToUint(" + p_buffer + "[" + p_index + "].xy)";
++			return "floatBitsToUint(" + read(0) + ".xy)";
+ 		}
+ 		case ShaderLanguage::TYPE_UVEC3: {
+-			return "floatBitsToUint(" + p_buffer + "[" + p_index + "].xyz)";
++			return "floatBitsToUint(" + read(0) + ".xyz)";
+ 		}
+ 		case ShaderLanguage::TYPE_UVEC4: {
+-			return "floatBitsToUint(" + p_buffer + "[" + p_index + "].xyzw)";
++			return "floatBitsToUint(" + read(0) + ".xyzw)";
+ 		}
+ 		case ShaderLanguage::TYPE_FLOAT: {
+-			return "(" + p_buffer + "[" + p_index + "].x)";
++			return "(" + read(0) + ".x)";
+ 		}
+ 		case ShaderLanguage::TYPE_VEC2: {
+-			return "(" + p_buffer + "[" + p_index + "].xy)";
++			return "(" + read(0) + ".xy)";
+ 		}
+ 		case ShaderLanguage::TYPE_VEC3: {
+-			return "(" + p_buffer + "[" + p_index + "].xyz)";
++			return "(" + read(0) + ".xyz)";
+ 		}
+ 		case ShaderLanguage::TYPE_VEC4: {
+-			return "(" + p_buffer + "[" + p_index + "].xyzw)";
++			return "(" + read(0) + ".xyzw)";
+ 		}
+ 		case ShaderLanguage::TYPE_MAT2: {
+-			return "mat2(" + p_buffer + "[" + p_index + "].xy," + p_buffer + "[" + p_index + "+1u].xy)";
++			return "mat2(" + read(0) + ".xy," + read(1) + ".xy)";
+ 		}
+ 		case ShaderLanguage::TYPE_MAT3: {
+-			return "mat3(" + p_buffer + "[" + p_index + "].xyz," + p_buffer + "[" + p_index + "+1u].xyz," + p_buffer + "[" + p_index + "+2u].xyz)";
++			return "mat3(" + read(0) + ".xyz," + read(1) + ".xyz," + read(2) + ".xyz)";
+ 		}
+ 		case ShaderLanguage::TYPE_MAT4: {
+-			return "mat4(" + p_buffer + "[" + p_index + "].xyzw," + p_buffer + "[" + p_index + "+1u].xyzw," + p_buffer + "[" + p_index + "+2u].xyzw," + p_buffer + "[" + p_index + "+3u].xyzw)";
++			return "mat4(" + read(0) + ".xyzw," + read(1) + ".xyzw," + read(2) + ".xyzw," + read(3) + ".xyzw)";
+ 		}
+ 		default: {
+ 			ERR_FAIL_V("void");

@@ -1,0 +1,50 @@
+{
+  "game": "Lucid Blocks",
+  "steam_app_id": 3495730,
+  "steam_build_id": "26206996",
+  "engine": "4.6.0",
+  "precision": "double",
+  "architecture": "aarch64",
+  "source_dir": "C:\\Users\\dimas\\lucid-blocks-nx",
+  "build_dir": "C:\\Users\\dimas\\lucid-build",
+  "original_project": "C:\\Users\\dimas\\lucid-build\\recovered-original",
+  "working_project": "C:\\Users\\dimas\\lucid-build\\game",
+  "upstream": {
+    "gdblocks_url": "https://github.com/kiwijuice56/lucid-blocks-gdblocks",
+    "gdblocks_commit": "ef2c5f35d06c11d7dfffbca3d5b664464798626f",
+    "godot_cpp_commit": "863d732f448664f192c2e143cb6778de2867a2da",
+    "godot_url": "https://github.com/godotengine/godot",
+    "godot_commit": "89cea143987d564363e15d207438530651d943ac"
+  },
+  "native_kind": "static ARM64 libraries with engine GDExtensionManager bridge",
+  "gameplay_on_switch_verified": false,
+  "candidate_runtime": {
+    "url": "https://github.com/SnepOMatic/Godot-for-Nintendo-Switch",
+    "branch": "4.7.2-unstable-switch",
+    "commit": "650036e08177daeb0f72b7c2201fad7710efeffa",
+    "compiled": true,
+    "dynamic_extensions_supported": false,
+    "renderer": "GLES compatibility; deko scaffold explicitly non-rendering",
+    "game_api_compatibility_verified": false,
+    "build_in_progress": false,
+    "global_instance_storage": "RGBA32UI texture; desktop algorithm test passed, console unverified",
+    "clock_service_access": false,
+    "console_boot_status": "OPT03 SaltyNX connected at 60 Hz; OPT04 shader binary hint and shared persistent item meshes await hardware test"
+  },
+  "native_component_validation": "C:/Users/dimas/lucid-build/reports/native-validation.json",
+  "headless_host_validation": "C:/Users/dimas/lucid-build/reports/host-switch-current-startup.json",
+  "engine_validation": "C:\\Users\\dimas\\lucid-build\\reports\\engine-opt04-validation.json",
+  "sd_bundle": "C:\\Users\\dimas\\lucid-build\\release\\SD_ROOT",
+  "sd_deployment": "C:/Users/dimas/lucid-build/reports/sd-deployment.json",
+  "sd_copy_verified": true,
+  "local_archive": "C:\\Users\\dimas\\lucid-build\\release\\LUCID_BLOCKS_NX_0.1.0_TEST1_OPT04.zip",
+  "current_build": "0.1.0-test1-opt04",
+  "full_nsp_candidate": {
+    "build": "NSP01",
+    "file": "C:\\Users\\dimas\\lucid-build\\release\\LUCID_BLOCKS_NX_FULL_NSP01.nsp",
+    "bytes": 880629464,
+    "compressed_game_bytes": 814849234,
+    "payload_verified": true,
+    "console_launch_verified": false
+  }
+}

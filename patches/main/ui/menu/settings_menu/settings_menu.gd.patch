@@ -1,0 +1,13 @@
+--- a/main/ui/menu/settings_menu/settings_menu.gd
++++ b/main/ui/menu/settings_menu/settings_menu.gd
+@@ -47,6 +47,10 @@
+ 
+ 
+ func _ready() -> void :
++	if OS.has_feature("switch"):
++		%RenderDistanceSpinBox.min_value = 32
++		%RenderDistanceSpinBox.max_value = 64
++
+ 	for control in settings_map:
+ 		settings_map_inverse[settings_map[control]] = control
+ 

@@ -1,0 +1,22 @@
+--- a/main/entity/gel/model/gel.gdshader
++++ b/main/entity/gel/model/gel.gdshader
+@@ -1,4 +1,10 @@
+ // https://godotshaders.com/shader/magic-crystal/
++
++#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
++#define NX_EYE_OFFSET vec3(0.0)
++#else
++#define NX_EYE_OFFSET EYE_OFFSET
++#endif
+ shader_type spatial;
+ render_mode unshaded, cull_disabled;
+ 
+@@ -13,7 +19,7 @@
+ 
+ void vertex() {
+ 	vec3 worldNormal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
+-	vec3 lookDir = normalize((MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz - (INV_VIEW_MATRIX * vec4(EYE_OFFSET, 1.0)).xyz);
++	vec3 lookDir = normalize((MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz - (INV_VIEW_MATRIX * vec4(NX_EYE_OFFSET, 1.0)).xyz);
+ 	lookDot = abs(dot(lookDir, worldNormal));
+ }
+ 

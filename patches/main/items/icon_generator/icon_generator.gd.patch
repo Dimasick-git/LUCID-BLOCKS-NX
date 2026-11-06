@@ -1,0 +1,45 @@
+--- a/main/items/icon_generator/icon_generator.gd
++++ b/main/items/icon_generator/icon_generator.gd
+@@ -64,8 +64,29 @@
+ 		if item.icon:
+ 			item.color = get_average_color(item)
+ 
++# Meshes depend only on icon pixels. Directional variants share their icon.
++var nx_icon_meshes: Dictionary[RID, Mesh] = {}
++const NX_MESH_CACHE := "user://cache/item_mesh_v1/"
++
+ func generate_item_mesh(item: Item) -> Mesh:
++	var nx_enabled := OS.has_feature("switch")
++	var nx_key: RID = item.icon.get_rid()
++	if nx_enabled and nx_icon_meshes.has(nx_key):
++		return nx_icon_meshes[nx_key]
+ 	var img: Image = item.icon.get_image()
++	var nx_path := ""
++	if nx_enabled:
++		var fingerprint := "%dx%d_%d_%s" % [img.get_width(), img.get_height(), img.get_format(), img.get_data().hex_encode().md5_text()]
++		nx_path = NX_MESH_CACHE + fingerprint + ".res"
++		var nx_read_path := nx_path
++		var nx_bundled_path := "title:/lucid-blocks/cache/item_mesh_v1/" + fingerprint + ".res"
++		if FileAccess.file_exists(nx_bundled_path):
++			nx_read_path = nx_bundled_path
++		if FileAccess.file_exists(nx_read_path):
++			var cached := ResourceLoader.load(nx_read_path, "ArrayMesh") as ArrayMesh
++			if cached != null and cached.get_surface_count() > 0:
++				nx_icon_meshes[nx_key] = cached
++				return cached
+ 	var array_mesh: ArrayMesh = ArrayMesh.new()
+ 	var vertices: PackedVector3Array
+ 	var normals: PackedVector3Array
+@@ -106,6 +127,12 @@
+ 	arrays[ArrayMesh.ARRAY_NORMAL] = normals
+ 	arrays[ArrayMesh.ARRAY_TEX_UV] = uvs
+ 	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
++	if nx_enabled:
++		nx_icon_meshes[nx_key] = array_mesh
++		DirAccess.make_dir_recursive_absolute(NX_MESH_CACHE)
++		var cache_error := ResourceSaver.save(array_mesh, nx_path, ResourceSaver.FLAG_COMPRESS)
++		if cache_error != OK:
++			push_warning("NX item mesh cache write failed: %d" % cache_error)
+ 	return array_mesh
+ 
+ 

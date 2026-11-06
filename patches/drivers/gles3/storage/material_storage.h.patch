@@ -1,0 +1,10 @@
+--- a/drivers/gles3/storage/material_storage.h
++++ b/drivers/gles3/storage/material_storage.h
+@@ -640,6 +640,7 @@
+ 	virtual void global_shader_parameters_instance_update(RID p_instance, int p_index, const Variant &p_value, int p_flags_count = 0) override;
+ 
+ 	GLuint global_shader_parameters_get_uniform_buffer() const;
++	void bind_global_shader_parameters() const;
+ 
+ 	/* SHADER API */
+ 

@@ -1,0 +1,38 @@
+--- a/core/io/file_access_pack.cpp
++++ b/core/io/file_access_pack.cpp
+@@ -31,6 +31,9 @@
+ #include "file_access_pack.h"
+ 
+ #include "core/io/file_access_encrypted.h"
++#ifdef HORIZON_ENABLED
++#include "core/io/file_access_compressed.h"
++#endif
+ #include "core/io/file_access_patched.h"
+ #include "core/object/script_language.h"
+ #include "core/os/os.h"
+@@ -375,6 +378,25 @@
+ 
+ Ref<FileAccess> PackedSourcePCK::get_file(const String &p_path, PackedData::PackedFile *p_file, const Vector<uint8_t> &p_decryption_key) {
+ 	Ref<FileAccess> file(memnew(FileAccessPack(p_path, *p_file, p_decryption_key)));
++#ifdef HORIZON_ENABLED
++    // NXZ4 is a seekable Godot FileAccessCompressed envelope. The underlying
++    // resource remains byte-identical; only the PCK storage is compressed.
++    if (file->get_length() >= 20 && file->get_32() == 0x345a584e) {
++        const uint32_t mode = file->get_32();
++        const uint32_t block = file->get_32();
++        const uint32_t total = file->get_32();
++        ERR_FAIL_COND_V(mode != 2 || block != 262144 || total > 512U * 1024 * 1024, Ref<FileAccess>());
++        ERR_FAIL_COND_V(16ULL + (total / block + 1ULL) * 4 >= file->get_length(), Ref<FileAccess>());
++        file->seek(4);
++        Ref<FileAccessCompressed> compressed;
++        compressed.instantiate();
++        const Error err = compressed->open_after_magic(file);
++        ERR_FAIL_COND_V(err != OK, Ref<FileAccess>());
++        file = compressed;
++    } else {
++        file->seek(0);
++    }
++#endif
+ 
+ 	if (PackedData::get_singleton()->has_delta_patches(p_path)) {
+ 		Ref<FileAccessPatched> file_patched;

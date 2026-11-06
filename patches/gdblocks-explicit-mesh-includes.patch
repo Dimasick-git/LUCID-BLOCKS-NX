@@ -1,0 +1,11 @@
+--- a/extension/include/chunk.h
++++ b/extension/include/chunk.h
+@@ -3,6 +3,8 @@
+ 
+ #include "macros.h"
+ #include <vector>
++#include <godot_cpp/classes/array_mesh.hpp>
++#include <godot_cpp/classes/physics_server3d.hpp>
+ 
+ #include "block.h"
+ #include "decoration.h"

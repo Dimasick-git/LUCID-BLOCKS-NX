@@ -1,0 +1,20 @@
+--- a/main/autoload/steamworks.gd
++++ b/main/autoload/steamworks.gd
+@@ -57,7 +57,7 @@
+ 
+ 
+ func _init() -> void :
+-	allow_steam = not OS.has_feature("android")
++	allow_steam = Engine.has_singleton("Steam") and not OS.has_feature("android") and not OS.has_feature("switch")
+ 
+ 	if not allow_steam:
+ 		return
+@@ -150,7 +150,7 @@
+ 		qualia_downloaded.emit(false)
+ 		return
+ 
+-	var info: Dictionary = Steam.getItemInstallInfo(file_id)
++	var info: Dictionary = steam_core.getItemInstallInfo(file_id)
+ 	var source_directory: String = info.folder
+ 
+ 	print_rich("[color=#5c6066]Item successfully downloaded: %s" % info)

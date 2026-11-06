@@ -1,0 +1,18 @@
+--- a/main/ui/menu/settings_menu/hotkey_remapping/hotkey.gd
++++ b/main/ui/menu/settings_menu/hotkey_remapping/hotkey.gd
+@@ -87,6 +87,15 @@
+ 		shortened_name = shortened_name.replace(" - physical", "")
+ 		shortened_name = shortened_name.replace("button", "")
+ 		shortened_name = shortened_name.strip_edges()
++	if OS.has_feature("switch"):
++		if current_event is InputEventJoypadButton:
++			var names: Dictionary = {JOY_BUTTON_A: "B", JOY_BUTTON_B: "A", JOY_BUTTON_X: "Y", JOY_BUTTON_Y: "X", JOY_BUTTON_LEFT_SHOULDER: "L", JOY_BUTTON_RIGHT_SHOULDER: "R", JOY_BUTTON_BACK: "-", JOY_BUTTON_START: "+", JOY_BUTTON_LEFT_STICK: "L Stick", JOY_BUTTON_RIGHT_STICK: "R Stick"}
++			shortened_name = names.get(current_event.button_index, shortened_name)
++		elif current_event is InputEventJoypadMotion:
++			if current_event.axis == JOY_AXIS_TRIGGER_LEFT:
++				shortened_name = "ZL"
++			elif current_event.axis == JOY_AXIS_TRIGGER_RIGHT:
++				shortened_name = "ZR"
+ 	shortened_name = " " + shortened_name + " "
+ 
+ 	%HotkeyInput.text = shortened_name
