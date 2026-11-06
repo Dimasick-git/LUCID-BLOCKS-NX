@@ -80,6 +80,10 @@ with tempfile.TemporaryDirectory() as work:
     assert uploaded['size'] == manifest['bytes'] and uploaded['state'] == 'uploaded'
     if uploaded.get('digest'):
         assert uploaded['digest'] == 'sha256:'+manifest['sha256']
+    else:
+        readback = work/'readback.nsp'
+        assert download(uploaded, readback) == manifest['sha256']
+        readback.unlink()
     # Delete only the pieces listed in this validated transfer manifest.
     for asset in [assets[p['name']] for p in manifest['parts']]+[manifest_asset]:
         request(BASE+'/releases/assets/'+str(asset['id']), method='DELETE').close()
