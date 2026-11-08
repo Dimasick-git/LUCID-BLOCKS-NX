@@ -1,0 +1,11 @@
+--- a/main/ui/menu/main_menu/main_menu.gd
++++ b/main/ui/menu/main_menu/main_menu.gd
+@@ -72,7 +72,7 @@
+ 
+ 
+ func show_tutorial() -> void :
+-	%GraphicsPresetButton.selected = 3
++	%GraphicsPresetButton.selected = 0 if OS.has_feature("switch") else 3
+ 	%GraphicsCover.visible = true
+ 	%TutorialScreen.visible = true
+ 

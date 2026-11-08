@@ -1,0 +1,11 @@
+--- a/main/entity/yhvh/comet/comet.gd
++++ b/main/entity/yhvh/comet/comet.gd
+@@ -24,7 +24,7 @@
+ 	if %HitRayCast3D.is_colliding():
+ 		explode( %HitRayCast3D.get_collision_point())
+ 	global_position += speed * delta * direction
+-	if global_position.distance_to(Ref.player.global_position) > 200.0:
++	if global_position.distance_to(Ref.nx_target_position(global_position)) > 200.0:
+ 		queue_free()
+ 	rotation += delta * speed * Vector3(0.1, 0.4, 0.12)
+ 

@@ -1,0 +1,11 @@
+--- a/main/entity/huitzilopochtli/huitzilopochtli.gd
++++ b/main/entity/huitzilopochtli/huitzilopochtli.gd
+@@ -50,7 +50,7 @@
+ 	lightning.position = head.global_position
+ 	lightning.entity_owner = self
+ 	get_tree().get_root().add_child(lightning)
+-	lightning.fire(Ref.player.global_position, 1.5)
++	lightning.fire(Ref.nx_target_position(global_position), 1.5)
+ 
+ 	is_shooting_lightning = false
+ 

@@ -1,0 +1,22 @@
+--- a/main/entity/mipos/mipos.gd
++++ b/main/entity/mipos/mipos.gd
+@@ -70,7 +70,7 @@
+ 		burst_timer.start(2.0)
+ 	if dead or disabled or not is_inside_tree():
+ 		return
+-	var dist_to_player: float = Ref.player.global_position.distance_to(global_position)
++	var dist_to_player: float = Ref.nx_target_position(global_position).distance_to(global_position)
+ 	if state != ANGRY and dist_to_player > 16.0:
+ 		return
+ 	elif state == ANGRY:
+@@ -137,8 +137,8 @@
+ 			initialize_state()
+ 	crashed = false
+ 
+-	if not Ref.sun.is_day() and randf() < 0.01 and is_instance_valid(Ref.player) and Ref.player.global_position.distance_to(global_position) < 16.0:
+-		_on_attacked(Ref.player)
++	if not Ref.sun.is_day() and randf() < 0.01 and is_instance_valid(Ref.player) and Ref.nx_target_position(global_position).distance_to(global_position) < 16.0:
++		_on_attacked(Ref.nx_target_entity(global_position))
+ 
+ 	%ObstructionRayCast3D.target_position = desired_direction
+ 	%ObstructionRayCast3D.force_raycast_update()

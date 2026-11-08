@@ -1,0 +1,58 @@
+--- a/main/save_file/save_file_manager.gd
++++ b/main/save_file/save_file_manager.gd
+@@ -15,6 +15,7 @@
+ 
+ var loaded_file: SaveFile
+ var loaded_file_register: SaveFileRegister
++var nx_remote_world_loaded: bool = false
+ 
+ 
+ func root_data_path() -> String:
+@@ -46,6 +47,10 @@
+ 
+ 
+ func get_save_file_directory(uuid: String, ugc: bool = false, backup: bool = false) -> String:
++	if nx_remote_world_loaded:
++		var path := "user://cache/lan-world".path_join(uuid.validate_filename())
++		DirAccess.make_dir_recursive_absolute(path)
++		return path
+ 	var root: String = root_backup_path() if backup else (root_ugc_path() if ugc else root_save_file_path())
+ 	return root.path_join(uuid)
+ 
+@@ -73,7 +78,8 @@
+ 
+ 
+ func overwrite_settings_file_with_preset(preset: int) -> void :
+-	settings_file.data.clear()
++	for key in SettingsManager.preset_controlled:
++		settings_file.erase_data(key)
+ 
+ 	settings_file.set_data("graphics_preset", preset)
+ 	device_file.set_data("last_graphics_preset", preset)
+@@ -121,6 +127,7 @@
+ 
+ 
+ func initialize_file() -> void :
++	nx_remote_world_loaded = false
+ 	loaded_file_register = SaveFileRegister.new()
+ 	loaded_file_register.is_dimensional = false
+ 	loaded_file_register.set_data("creation_date", Time.get_datetime_dict_from_system())
+@@ -155,6 +162,7 @@
+ 
+ 
+ func load_file(new_file_register: SaveFileRegister, read_from_file: bool = true) -> void :
++	nx_remote_world_loaded = Ref.coop_manager != null and Ref.coop_manager.is_client_session()
+ 	loaded_file_register = new_file_register
+ 	loaded_file_register.is_dimensional = false
+ 
+@@ -209,6 +217,10 @@
+ 
+ 
+ func save_file(write: bool = true) -> void :
++	if nx_remote_world_loaded:
++		if Ref.coop_manager != null:
++			Ref.coop_manager._send_persistent_state_to_host(true)
++		return
+ 	assert (write)
+ 
+ 	if not Ref.world.is_all_loaded():

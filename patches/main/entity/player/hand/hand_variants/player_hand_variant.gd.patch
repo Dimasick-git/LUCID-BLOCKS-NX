@@ -1,0 +1,55 @@
+--- a/main/entity/player/hand/hand_variants/player_hand_variant.gd
++++ b/main/entity/player/hand/hand_variants/player_hand_variant.gd
+@@ -7,6 +7,7 @@
+ var held_item: HeldItem
+ var item_state: ItemState
+ var current_anim: AnimationPlayer
++var nx_action_serial: int = 0
+ var state: State
+ 
+ 
+@@ -43,6 +44,8 @@
+ 	anim.play("trigger")
+ 
+ 	state = State.INTERACT
++	nx_action_serial += 1
++	if Ref.coop_manager != null: Ref.coop_manager.nx_send_visuals.call_deferred(true)
+ 
+ 
+ func hit() -> void :
+@@ -56,6 +59,8 @@
+ 	anim.play("trigger")
+ 
+ 	state = State.HIT
++	nx_action_serial += 1
++	if Ref.coop_manager != null: Ref.coop_manager.nx_send_visuals.call_deferred(true)
+ 
+ 
+ func hit_sustain_start() -> void :
+@@ -70,6 +75,8 @@
+ 	anim.play("trigger")
+ 
+ 	state = State.HIT_SUSTAIN
++	nx_action_serial += 1
++	if Ref.coop_manager != null: Ref.coop_manager.nx_send_visuals.call_deferred(true)
+ 
+ 
+ func hit_sustain_end() -> void :
+@@ -92,6 +99,8 @@
+ 	anim.play("trigger")
+ 
+ 	state = State.INTERACT_SUSTAIN
++	nx_action_serial += 1
++	if Ref.coop_manager != null: Ref.coop_manager.nx_send_visuals.call_deferred(true)
+ 
+ 
+ func interact_sustain_end() -> void :
+@@ -115,6 +124,8 @@
+ 	anim.play("trigger")
+ 
+ 	state = State.IDLE
++	nx_action_serial += 1
++	if Ref.coop_manager != null: Ref.coop_manager.nx_send_visuals.call_deferred(true)
+ 
+ 
+ func reset() -> void :

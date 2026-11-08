@@ -1,0 +1,49 @@
+--- a/main/items/held_item/held_hoe/held_hoe.gd
++++ b/main/items/held_item/held_hoe/held_hoe.gd
+@@ -12,15 +12,27 @@
+ 		place_position = place_position.floor()
+ 		if not Ref.world.is_position_loaded(place_position):
+ 			continue
+-
+ 		if Ref.world.is_block_solid_at(place_position):
+ 			continue
+ 
+ 		var block: Block = Ref.world.get_block_type_at(place_position)
+ 		if not block.foliage:
+ 			continue
++
++		var block_position: Vector3i = Vector3i(place_position)
++
++		if Ref.coop_manager != null and holder == Ref.player and Ref.coop_manager.sync_local_foliage_break(block_position):
++			holder.decrease_held_item_durability(1)
++			return true
++
++		if _should_broadcast_host_foliage_break():
++			Ref.coop_manager.request_foliage_break(block_position)
++			holder.decrease_held_item_durability(1)
++			return true
++
+ 		Ref.world.break_block_at(place_position, true, false)
+-
++		if Ref.coop_manager != null and holder == Ref.player:
++			Ref.coop_manager.notify_local_world_state_dirty([Vector3i(place_position)])
+ 		if block.can_drop:
+ 			var new_state: ItemState = ItemState.new()
+ 			if block.directional:
+@@ -36,7 +48,6 @@
+ 			new_item.initialize(new_state)
+ 
+ 		holder.decrease_held_item_durability(1)
+-
+ 		return true
+ 	return false
+ 
+@@ -60,3 +71,8 @@
+ 
+ 		return true
+ 	return false
++
++func _should_broadcast_host_foliage_break() -> bool:
++	return Ref.coop_manager != null and multiplayer.is_server() and Ref.coop_manager.has_active_session() and not Ref.coop_manager.is_remote_player_proxy(holder)
++
++

@@ -1,0 +1,16 @@
+{
+  "network_reference": {
+    "author": "parkers0405 and lucid-blocks-coop contributors",
+    "source": "https://github.com/parkers0405/lucid-blocks-coop",
+    "revision": "57140c7abe02a921defa4184d474fb3e0ef841eb",
+    "changes": "Adapted for Lucid Blocks 5.2, Horizon, two-player LAN and native multi-center streaming."
+  },
+  "avatar": {
+    "title": "Low Poly Character",
+    "author": "Alihan (Dare0)",
+    "source": "https://sketchfab.com/3d-models/low-poly-character-e3b084a1ba26496ca8bb77d2e97da061",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "changes": "Renamed skeleton bones and added generated animation clips; bundled as a Godot scene."
+  }
+}

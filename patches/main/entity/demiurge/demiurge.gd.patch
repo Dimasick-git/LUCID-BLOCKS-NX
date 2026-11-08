@@ -1,0 +1,11 @@
+--- a/main/entity/demiurge/demiurge.gd
++++ b/main/entity/demiurge/demiurge.gd
+@@ -73,7 +73,7 @@
+ 		global_position += velocity * delta
+ 
+ 	var speed_multiplier: float = 1.0
+-	var player_head: Vector3 = Ref.player.head.global_position
++	var player_head: Vector3 = Ref.nx_target_head(global_position)
+ 	var to_player: Vector3 = player_head - head.global_position
+ 	var horizontal_offset: Vector3 = Vector3(to_player.x, 0, to_player.z)
+ 	var horizontal_distance: float = horizontal_offset.length()

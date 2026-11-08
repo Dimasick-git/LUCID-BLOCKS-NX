@@ -77,8 +77,14 @@ def main():
     p.add_argument('--pack', type=Path, required=True)
     p.add_argument('--keys', type=Path, required=True)
     p.add_argument('--output', type=Path, default=BUILD/'release/LUCID_BLOCKS_NX_FULL_NSP01.nsp')
+    p.add_argument('--build', default='NSP01')
+    p.add_argument('--version', default='0.1.0-nsp01')
     p.add_argument('--packer', type=Path, default=Path('C:/Users/dimas/uk-build/hacbrewpack-low-disk-v2/hacbrewpack-low-disk.exe'))
     a = p.parse_args()
+    if not a.build.isalnum() or len(a.build) > 24:
+        raise ValueError('Invalid build identifier')
+    if not a.version.isascii() or not 1 <= len(a.version) <= 15:
+        raise ValueError('Invalid NACP version')
     assert not a.output.exists()
     compression = json.loads(a.pack.with_suffix('.verified.json').read_text())
     assert compression['all_logical_resource_checksums_verified']
@@ -96,15 +102,15 @@ def main():
         shutil.copytree(BUILD/'nsp01-cache', work/'romfs/lucid-blocks/cache')
         payload = {f.relative_to(work/'romfs').as_posix(): {'bytes': f.stat().st_size, 'sha256': digest(f)}
                    for f in (work/'romfs').rglob('*') if f.is_file()}
-        manifest = {'build': 'NSP01', 'title_id': '0100963461C50000',
+        manifest = {'build': a.build, 'title_id': '0100963461C50000',
                     'storage': 'installed title RomFS; SD saves and writable caches', 'files': payload}
         manifest_path = work/'romfs/install-manifest.json'
         manifest_path.write_text(json.dumps(manifest, indent=2)+'\n')
         expected = dict(payload)
         expected['install-manifest.json'] = {'bytes': manifest_path.stat().st_size, 'sha256': digest(manifest_path)}
-        with (BUILD/'reports/full-nsp01-package.log').open('w') as log:
+        with (BUILD/f'reports/full-{a.build.lower()}-package.log').open('w') as log:
             subprocess.run(['C:/devkitPro/tools/bin/nacptool.exe', '--create', 'Lucid Blocks NX', 'Dimasick-git',
-                            '0.1.0-nsp01', str(work/'control/control.nacp')], stdout=log, stderr=subprocess.STDOUT, check=True)
+                            a.version, str(work/'control/control.nacp')], stdout=log, stderr=subprocess.STDOUT, check=True)
             subprocess.run([str(a.packer), '-k', str(a.keys), '--exefsdir', 'exefs', '--controldir', 'control',
                             '--romfsdir', 'romfs', '--nologo', '--titleid', '0100963461C50000',
                             '--titlename', 'Lucid Blocks NX', '--titlepublisher', 'Dimasick-git'],
@@ -114,10 +120,11 @@ def main():
         assert outputs[0].stat().st_size < 0xffffffff
         shutil.move(str(outputs[0]), a.output)
     report = {'file': str(a.output), 'bytes': a.output.stat().st_size, 'sha256': digest(a.output),
-              'build': 'NSP01', 'title_id': '0100963461C50000', 'nca_ivfc_and_payload_verified': True,
+              'build': a.build, 'version': a.version, 'title_id': '0100963461C50000', 'nca_ivfc_and_payload_verified': True,
               'embedded_files': len(expected), 'archives': archives, 'console_launch_verified': False,
               'compressed_game_bytes': compression['bytes'], 'logical_game_bytes': compression['source_bytes']}
     a.output.with_suffix('.verified.json').write_text(json.dumps(report, indent=2)+'\n')
+    a.output.with_suffix('.payload.json').write_text(json.dumps(expected, indent=2)+'\n')
     print(json.dumps(report, indent=2))
 
 if __name__ == '__main__':

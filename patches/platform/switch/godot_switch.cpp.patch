@@ -1,10 +1,12 @@
 --- a/platform/switch/godot_switch.cpp
 +++ b/platform/switch/godot_switch.cpp
-@@ -11,9 +11,12 @@
+@@ -11,9 +11,14 @@
  #include <locale.h>
  #include <stdlib.h>
  #include <unistd.h>
 +#include <netinet/in.h>
++#include <sys/socket.h>
++#include <errno.h>
  #include <zlib.h>
  
  #include "main/main.h"
@@ -13,7 +15,7 @@
  #include "os_switch.h"
  #include "switch_clocks.h"
  
-@@ -23,6 +26,25 @@
+@@ -23,6 +28,25 @@
  // Applets (album, user page, ...) get too little memory to run the engine;
  // show the "please launch as application" splash instead, as the 3.x port does.
  static int applet_splash_main() {
@@ -39,7 +41,7 @@
  	NWindow *win = nwindowGetDefault();
  	Framebuffer fb;
  	framebufferCreate(&fb, win, FB_WIDTH, FB_HEIGHT, PIXEL_FORMAT_RGBA_8888, 1);
-@@ -30,6 +52,7 @@
+@@ -30,6 +54,7 @@
  
  	u32 stride;
  	u32 *framebuf = (u32 *)framebufferBegin(&fb, &stride);
@@ -47,7 +49,7 @@
  
  	FILE *splash = fopen("romfs:/applet_splash.rgba.gz", "rb");
  	if (splash) {
-@@ -39,8 +62,6 @@
+@@ -39,8 +64,6 @@
  		fseek(splash, 0, SEEK_SET);
  		fread(compressed_splash, 1, splash_size, splash);
  		fclose(splash);
@@ -56,7 +58,7 @@
  
  		struct z_stream_s stream;
  		memset(&stream, 0, sizeof(stream));
-@@ -55,63 +76,26 @@
+@@ -55,63 +78,40 @@
  		free(compressed_splash);
  	}
  	framebufferEnd(&fb);
@@ -70,7 +72,7 @@
 -			break;
 -		}
 -	}
--	framebufferClose(&fb);
+ 	framebufferClose(&fb);
 -	return 0;
 -}
 -
@@ -110,11 +112,25 @@
 -		free(compressed_splash);
 -	}
 -	framebufferEnd(&fb);
- 	framebufferClose(&fb);
+-	framebufferClose(&fb);
++}
++
++static Result nx_socket_result;
++void nx_network_ensure_initialized() {
++    // SaltyNX raises the process session budget before this retry. Keep a
++    // successful BSD initialization intact and retry only an earlier failure.
++    if (R_FAILED(nx_socket_result)) nx_socket_result = socketInitializeDefault();
++    printf("[nx-net] socket initialization=%08x\n", nx_socket_result);
++    if (R_SUCCEEDED(nx_socket_result)) {
++        int probe = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
++        printf("[nx-net] UDP socket probe=%d errno=%d\n", probe, probe < 0 ? errno : 0);
++        if (probe >= 0) close(probe);
++    }
  }
  
  int main(int argc, char *argv[]) {
- 	socketInitializeDefault();
+-	socketInitializeDefault();
++	nx_socket_result = socketInitializeDefault();
  	nxlinkStdio();
 -	romfsInit();
 +    mkdir("sdmc:/switch", 0777);
@@ -129,12 +145,13 @@
 +        }
 +    }
 +    printf("[lucid-nx] boot: Godot/Horizon double precision\n");
++    printf("[nx-net] initial socket initialization=%08x\n", nx_socket_result);
 +	Result romfs_result = romfsInit();
 +	printf("[lucid-nx] romfs result=%08x\n", romfs_result);
  
  	// Enable Mesa's on-disk shader cache; it normally keys off $HOME, which
  	// doesn't exist on Horizon. Caches the GLSL -> GPU ISA compilation in
-@@ -119,12 +103,12 @@
+@@ -119,12 +119,12 @@
  	// spellings are set (Mesa <= 21 used MESA_GLSL_*). Harmless if the
  	// portlibs Mesa build has the disk cache compiled out.
  	mkdir("sdmc:/switch", 0777);
@@ -152,7 +169,7 @@
  	setenv("MESA_GLSL_CACHE_MAX_SIZE", "256M", 1);
  	setenv("MESA_SHADER_CACHE_MAX_SIZE", "256M", 1);
  	// Marshal GL calls on a driver-side thread; draw-call submission is the
-@@ -133,6 +117,7 @@
+@@ -133,6 +133,7 @@
  	setenv("mesa_glthread", "true", 1);
  
  	int apptype = appletGetAppletType();
@@ -160,7 +177,7 @@
  	if (apptype != AppletType_Application && apptype != AppletType_SystemApplication) {
  		int ret = applet_splash_main();
  		romfsExit();
-@@ -142,22 +127,19 @@
+@@ -142,22 +143,19 @@
  
  	// [Switch fork] Boot splash during engine init (application mode). Bridges the
  	// grey gap before Godot's own boot splash / first GL frame appears.
@@ -188,7 +205,7 @@
  	int arg_count = 0;
  	for (int i = 1; i < argc; i++) {
  		const char *prefix = "--switch-os-name=";
-@@ -176,18 +158,48 @@
+@@ -176,18 +174,48 @@
  			os.set_environment("GODOT_DEKO3D_SHADER_CACHE", dksh_path);
  		} else if (strcmp(argv[i], "--switch-perf") == 0) {
  			os.perf_logging = true;
@@ -242,7 +259,7 @@
  	if (err != OK) {
  		romfsExit();
  		socketExit();
-@@ -197,6 +209,31 @@
+@@ -197,6 +225,31 @@
  		return EXIT_FAILURE;
  	}
  
@@ -256,7 +273,7 @@
 +            return EXIT_FAILURE;
 +        }
 +    }
-+    printf("[lucid-nx] NSP01: required voxel classes present\n");
++    printf("[lucid-nx] NSP06 FOUR PLAYER STREAMING: required voxel classes present\n");
 +
 +    // Exercise the exact constructor callback that faulted before loading scenes.
 +    for (const char *class_name : {"Essence", "Item"}) {
@@ -274,7 +291,7 @@
  	if (Main::start() == EXIT_SUCCESS) {
  		os.run();
  	} else {
-@@ -204,82 +241,19 @@
+@@ -204,82 +257,19 @@
  	}
  	Main::cleanup();
  

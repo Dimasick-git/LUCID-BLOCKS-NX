@@ -1,0 +1,25 @@
+--- a/main/items/held_item/held_explosive/held_explosive.gd
++++ b/main/items/held_item/held_explosive/held_explosive.gd
+@@ -5,6 +5,17 @@
+ 
+ func interact(sustain: bool = false, data: Dictionary = {}) -> bool:
+ 	super.interact(sustain, data)
++
++	if Ref.coop_manager != null and holder == Ref.player and Ref.coop_manager.has_active_session() and Ref.coop_manager.is_client_session():
++		var explosive_scene_path: String = ""
++		if item != null and item.physical_explosive != null:
++			explosive_scene_path = item.physical_explosive.resource_path
++		var throw_velocity: Vector3 = holder.velocity + holder.get_look_direction() * throw_impulse
++		if not Ref.coop_manager.sync_local_explosive_throw(explosive_scene_path, holder.hand.global_position, throw_velocity):
++			return false
++		inventory.change_amount(inventory_index, -1)
++		Steamworks.set_achievement("BOMB")
++		return true
+ 
+ 	var new_explosive: PhysicalExplosive = item.physical_explosive.instantiate()
+ 	new_explosive.entity_owner = holder
+@@ -26,3 +37,4 @@
+ 	if not Ref.world.is_position_loaded(holder.hand.global_position) or Ref.world.is_block_solid_at(holder.hand.global_position):
+ 		return false
+ 	return true
++

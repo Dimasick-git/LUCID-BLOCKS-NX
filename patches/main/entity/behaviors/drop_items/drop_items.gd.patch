@@ -1,0 +1,49 @@
+--- a/main/entity/behaviors/drop_items/drop_items.gd
++++ b/main/entity/behaviors/drop_items/drop_items.gd
+@@ -13,8 +13,10 @@
+ 	assert (is_instance_valid(drop_spawn))
+ 
+ 
+-func drop_and_remove_from_inventory(inventory: Inventory, index: int) -> void :
++func drop_and_remove_from_inventory(inventory: Inventory, index: int) -> void:
+ 	if entity.disabled or not enabled:
++		return
++	if Ref.coop_manager != null and Ref.coop_manager.is_client_synced_entity(entity):
+ 		return
+ 
+ 	var to_drop: ItemState = inventory.items[index]
+@@ -25,17 +27,26 @@
+ 		drop_item(to_drop)
+ 
+ 
+-func drop_item(item: ItemState, override_disable: bool = false) -> void :
++func drop_item(item: ItemState, override_disable: bool = false) -> void:
+ 	if not override_disable and (entity.disabled or not enabled):
+ 		return
++	if Ref.coop_manager != null and Ref.coop_manager.is_client_synced_entity(entity):
++		return
+ 	%PopPlayer.play()
++
++	var spawn_position: Vector3 = drop_spawn.global_position - Vector3(0.5, 0.5, 0.5)
++	var launch_velocity: Vector3 = get_throw_direction() * throw_speed + entity.velocity
++	if entity == Ref.player and Ref.coop_manager != null and Ref.coop_manager.sync_local_drop_item(item, spawn_position, launch_velocity):
++		return
++
+ 	var new_item: DroppedItem = dropped_item_scene.instantiate()
+ 	new_item.delay_collect()
+-	new_item.position = drop_spawn.global_position - Vector3(0.5, 0.5, 0.5)
++	new_item.delay_merge()
++	new_item.position = spawn_position
+ 	get_tree().get_root().add_child(new_item)
+ 	new_item.initialize(item)
+ 	if new_item.state != DroppedItem.SWIM:
+-		new_item.movement_velocity = get_throw_direction() * throw_speed + entity.velocity
++		new_item.velocity = launch_velocity
+ 
+ 
+ func get_throw_direction() -> Vector3:
+@@ -44,3 +55,4 @@
+ 		return (look_position - target_raycast.global_position).normalized()
+ 	else:
+ 		return (target_raycast.to_global(target_raycast.target_position) - drop_spawn.global_position).normalized()
++

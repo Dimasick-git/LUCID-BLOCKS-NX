@@ -1,0 +1,59 @@
+--- a/main/entity/behaviors/pick_up_items/pick_up_items.gd
++++ b/main/entity/behaviors/pick_up_items/pick_up_items.gd
+@@ -22,7 +22,7 @@
+ 		return
+ 	%CollisionShape3D.disabled = false
+ 
+-func _on_dropped_item_entered(area: Area3D) -> void :
++func _on_dropped_item_entered(area: Area3D) -> void:
+ 	if not enabled or entity.dead or entity.disabled:
+ 		return
+ 	if not area.get_parent() is DroppedItem:
+@@ -33,32 +33,27 @@
+ 		return
+ 	if not dropped_item.can_collect:
+ 		return
+-	assert ( not Ref.main.debug or dropped_item.item.count > 0)
++	assert(not Ref.main.debug or dropped_item.item.count > 0)
+ 
+ 	if is_instance_valid(inventory_secondary):
+-
+ 		var remaining_item: ItemState = inventory_priority.accept(dropped_item.item, false)
+-
+ 
+ 		if remaining_item != null:
+ 			remaining_item = inventory_secondary.accept(remaining_item, false)
+ 
+-
+ 		if remaining_item != null:
+ 			remaining_item = inventory_priority.accept(remaining_item)
+-
+ 
+ 		if remaining_item != null:
+ 			remaining_item = inventory_secondary.accept(remaining_item)
+ 
+ 		if remaining_item == null:
+-			dropped_item.collect()
++			_try_collect_with_coop_animation(dropped_item)
+ 	else:
+ 		var remaining_item: ItemState = inventory_priority.accept(dropped_item.item)
+ 
+ 		if remaining_item == null:
+-			dropped_item.collect()
+-
++			_try_collect_with_coop_animation(dropped_item)
+ 
+ 
+ func accept_item(item_state: ItemState, override_disable: bool = false) -> void :
+@@ -84,3 +79,11 @@
+ 
+ 	if remaining_item != null and entity.has_node("%DropItems"):
+ 		entity.get_node("%DropItems").drop_item(remaining_item, override_disable)
++
++func _try_collect_with_coop_animation(dropped_item: DroppedItem) -> void:
++	if Ref.coop_manager != null and Ref.coop_manager.has_method("play_local_host_drop_collect_animation"):
++		if Ref.coop_manager.play_local_host_drop_collect_animation(entity, dropped_item):
++			return
++	dropped_item.collect()
++
++

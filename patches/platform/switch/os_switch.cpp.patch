@@ -1,14 +1,16 @@
 --- a/platform/switch/os_switch.cpp
 +++ b/platform/switch/os_switch.cpp
-@@ -1,3 +1,7 @@
+@@ -1,3 +1,9 @@
 +#include "core/config/engine.h"
++extern void nx_network_ensure_initialized();
 +extern "C" {
 +#include "nx_salty.h"
++#include "nx_loading.h"
 +}
  /**************************************************************************/
  /*  os_switch.cpp                                                         */
  /**************************************************************************/
-@@ -10,6 +14,7 @@
+@@ -10,6 +16,7 @@
  #include "core/config/project_settings.h"
  #include "core/os/main_loop.h"
  #include "main/main.h"
@@ -16,7 +18,23 @@
  #include "servers/display/display_server.h"
  #include "switch_wrapper.h"
  
-@@ -158,15 +163,15 @@
+@@ -64,8 +71,13 @@
+ }
+ 
+ int OS_Switch::get_processor_count() const {
+-	// Horizon gives applications three of the four Cortex-A57 cores.
+-	return 3;
++	// Report the process permission mask, not the physical chip or a
++    // hard-coded assumption. The forwarder allows 0..3; Horizon decides.
++    u64 mask = 0;
++    if (R_SUCCEEDED(svcGetInfo(&mask, InfoType_CoreMask, CUR_PROCESS_HANDLE, 0)) && (mask & 15)) {
++        return __builtin_popcountll(mask & 15);
++    }
++    return 3;
+ }
+ 
+ MainLoop *OS_Switch::get_main_loop() const {
+@@ -158,15 +170,15 @@
  }
  
  String OS_Switch::get_data_path() const {
@@ -35,11 +53,12 @@
  }
  
  String OS_Switch::get_user_data_dir(const String &p_user_dir) const {
-@@ -180,13 +185,49 @@
+@@ -180,13 +192,51 @@
  
  	main_loop->initialize();
  
 +    nx_salty_init();
++    nx_network_ensure_initialized();
 +    int nx_game_cap = -1, nx_applied_cap = -1;
 +    uint64_t sample_start = get_ticks_usec();
 +    uint64_t frame_total = 0, frame_max = 0;
@@ -62,6 +81,7 @@
 +            if (nx_current_cap == nx_applied_cap && nx_game_cap >= 0) Engine::get_singleton()->set_max_fps(nx_game_cap);
 +            nx_applied_cap = -1;
 +        }
++        nx_loading_tick();
 +        const bool quit = Main::iteration();
 +        const uint64_t now = get_ticks_usec();
 +        const uint64_t elapsed = now - frame_start;

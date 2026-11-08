@@ -1,0 +1,11 @@
+--- a/main/entity/shark/shark.gd
++++ b/main/entity/shark/shark.gd
+@@ -32,7 +32,7 @@
+ 	on_attacked.connect(_on_attacked)
+ 
+ 	if aggressive:
+-		target = Ref.player
++		target = Ref.nx_target_entity(global_position)
+ 	else:
+ 		angry = false
+ 

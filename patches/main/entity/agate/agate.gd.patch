@@ -1,0 +1,11 @@
+--- a/main/entity/agate/agate.gd
++++ b/main/entity/agate/agate.gd
+@@ -69,7 +69,7 @@
+ 	if state == WANDER:
+ 		state = CHASE
+ 		physical_timer.start(physical_attack_cooldown + randf_range(0.0, attack_time_variance))
+-		target = Ref.player
++		target = Ref.nx_target_entity(global_position)
+ 	awaken_timer.start(randf_range(awaken_time_min, awaken_time_max))
+ 
+ func _on_modulate_changed(new_modulate: Color) -> void :

@@ -33,7 +33,7 @@
  	print("Preloading item scenes...")
  	for id in all_item_ids:
  		var item: Item = id_to_resource[id]
-@@ -71,6 +78,7 @@
+@@ -71,9 +78,11 @@
  		if item is Spawner and item.entity_path != "":
  			item.entity_scene = ResourceLoader.load(item.entity_path)
  	print("Item scenes preloaded.")
@@ -41,3 +41,7 @@
  
  	items_done_loading.emit()
  	all_items_loaded = true
++	NxLocale.refresh_item_names()
+ 
+ 
+ func map(id: int) -> Item:

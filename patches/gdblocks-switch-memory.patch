@@ -1,3 +1,5 @@
+diff --git a/extension/include/chunk.h b/extension/include/chunk.h
+index 25e26b7..3523dab 100644
 --- a/extension/include/chunk.h
 +++ b/extension/include/chunk.h
 @@ -3,6 +3,8 @@
@@ -9,9 +11,120 @@
  
  #include "block.h"
  #include "decoration.h"
+diff --git a/extension/include/world.h b/extension/include/world.h
+index 004494e..3ccbb17 100644
+--- a/extension/include/world.h
++++ b/extension/include/world.h
+@@ -134,6 +134,15 @@ class World : public Node3D {
+ 	uint8_t water_direction = 0;
+ 	uint16_t simulated_water_subchunks = 0;
+ 	uint16_t rendered_water_chunks = 0;
++    uint32_t nx_water_render_cursor = 0;
++    Vector3i nx_prepared_center;
++    int64_t nx_prepared_radius = -1;
++    std::vector<Vector3i> nx_loaded_centers;
++    uint32_t nx_center_cursor = 0;
++    int64_t nx_pool_radius = -1;
++    int nx_pool_centers = 0;
++    bool nx_visual_only = false;
++    TypedDictionary<Vector3i, bool> nx_coop_mesh_queue;
+ 
+ 	// Living block state
+ 
+@@ -178,6 +187,7 @@ class World : public Node3D {
+ 
+ 	// Used to set the loaded region of the world, new_center is usually the player's position
+ 	void set_loaded_region_center(Vector3 new_center);
++    void set_loaded_region_centers(Array centers);
+ 	void update_loaded_region();
+ 	void initialize_chunk(uint64_t index); // MT
+ 	void initialize_chunk_decorations(uint64_t index); // MT
+@@ -185,6 +195,9 @@ class World : public Node3D {
+ 
+ 	// Helpful interfacing methods
+ 	void simulate_dynamic();
++    void refresh_dynamic_visuals();
++    bool apply_coop_patch(Dictionary data, String prefix);
++    void process_coop_updates();
+ 	bool is_position_loaded(Vector3 position) const;
+ 	bool is_position_loading(Vector3 position) const;
+ 	bool is_chunk_in_radius(Vector3i coordinate, int64_t radius) const;
+diff --git a/extension/src/chunk.cpp b/extension/src/chunk.cpp
+index f5439a9..6beb33c 100644
 --- a/extension/src/chunk.cpp
 +++ b/extension/src/chunk.cpp
-@@ -415,6 +415,17 @@
+@@ -1,5 +1,6 @@
+ #include "../include/world.h"
+ #include "../include/chunk.h"
++#include "../include/water_surface_rects.h"
+ 
+ #include <godot_cpp/core/class_db.hpp>
+ #include <godot_cpp/classes/physics_server3d.hpp>
+@@ -336,39 +337,31 @@ void Chunk::generate_water_surface_mesh(bool remove, Vector3 global_position, bo
+     face_count = 0;
+ 
+     if (!remove && water_count > 0) {
+-        for (uint64_t y = 0; y < CHUNK_SIZE_Y; y++) {
+-        for (uint64_t z = 0; z < CHUNK_SIZE_Z; z++) {
+-        for (uint64_t x = 0; x < CHUNK_SIZE_Y; x++) {
+-            if (get_water_at(Vector3i(x, y, z)) == 0) {
+-                continue;
+-            }
+-
+-            if (get_water_at_safe(Vector3i(x, y + 1, z)) != 0) {
+-                continue;
+-            }
+-
+-            if (get_water_at(Vector3i(x, y, z)) == 255 && get_block_index_at_safe(Vector3i(x, y + 1, z)) != 0) {
+-                continue;
++        for (int y = 0; y < CHUNK_SIZE_Y; y++) {
++            uint8_t heights[CHUNK_SIZE_Z][CHUNK_SIZE_X] = {};
++            for (int z = 0; z < CHUNK_SIZE_Z; z++) {
++                for (int x = 0; x < CHUNK_SIZE_X; x++) {
++                    const Vector3i at(x, y, z);
++                    const uint8_t level = get_water_at(at);
++                    if (!level || get_water_at_safe(at + Vector3i(0, 1, 0))) continue;
++                    if (level == 255 && get_block_index_at_safe(at + Vector3i(0, 1, 0)) != 0) continue;
++                    heights[z][x] = level;
++                }
+             }
+-
+-            Vector3 start = Vector3(x, y, z);
+-            Vector3 size = Vector3(1, get_water_at(start) / 255., 1);
+-
+-            vertices.resize(vertices.size() + 6);
+-            normals.resize(normals.size() + 6);
+-
+-            // Y, facing up
+-            vertices[face_count * 6 + 0] = start + Vector3(0, size.y, size.z);
+-            vertices[face_count * 6 + 1] = start + Vector3(0, size.y, 0);
+-            vertices[face_count * 6 + 2] = start + Vector3(size.x, size.y, 0);
+-            vertices[face_count * 6 + 3] = start + Vector3(0, size.y, size.z);
+-            vertices[face_count * 6 + 4] = start + Vector3(size.x, size.y, 0);
+-            vertices[face_count * 6 + 5] = start + Vector3(size.x, size.y, size.z);
+-            add_face_normals(Vector3(0, -1, 0));
+-
+-            face_count++;
+-        }
+-        }
++            lucid_nx::water_surface_rects(heights, [&](int x, int z, int width, int depth, uint8_t level) {
++                const Vector3 start(x, y + level / 255.0, z);
++                // Same height, winding and world-space shader coordinates as
++                // the original unit quads. Different levels never merge.
++                vertices.push_back(start + Vector3(0, 0, depth));
++                vertices.push_back(start);
++                vertices.push_back(start + Vector3(width, 0, 0));
++                vertices.push_back(start + Vector3(0, 0, depth));
++                vertices.push_back(start + Vector3(width, 0, 0));
++                vertices.push_back(start + Vector3(width, 0, depth));
++                normals.resize(vertices.size());
++                add_face_normals(Vector3(0, -1, 0));
++                face_count++;
++            });
+         }
+     }
+ 
+@@ -415,6 +408,17 @@ void Chunk::clear_collision() {
      empty["faces"] = PackedVector3Array();
      empty["backface_collision"] = false;
      ps->shape_set_data(collision_shape, empty);
@@ -29,7 +142,7 @@
  }
  
  // Keep track of block count and other state
-@@ -475,6 +486,11 @@
+@@ -475,6 +479,11 @@ void Chunk::finalize_main_mesh_loading() {
  
      foliage_mesh->set_mesh(foliage_array_mesh);
      set_mesh(main_array_mesh);
@@ -41,7 +154,7 @@
  }
  
  void Chunk::finalize_water_mesh_loading() {
-@@ -482,7 +498,11 @@
+@@ -482,7 +491,11 @@ void Chunk::finalize_water_mesh_loading() {
  }
  
  void Chunk::finalize_water_surface_mesh_loading() {
@@ -54,9 +167,219 @@
  }
  
  // Add all cross-faces for foliage to our mesh
+diff --git a/extension/src/world.cpp b/extension/src/world.cpp
+index 0aab65e..83791f2 100644
 --- a/extension/src/world.cpp
 +++ b/extension/src/world.cpp
-@@ -535,6 +535,10 @@
+@@ -6,6 +6,7 @@
+ #include <godot_cpp/classes/time.hpp>
+ 
+ #include <thread>
++#include <algorithm>
+ 
+ using namespace godot;
+ 
+@@ -17,7 +18,11 @@ void World::_bind_methods() {
+     BIND_METHOD_NO_PARAMETERS(World, is_all_loaded);
+     BIND_METHOD_NO_PARAMETERS(World, refresh_instance_radius);
+     BIND_METHOD(World, set_loaded_region_center, "new_center");
++    BIND_METHOD(World, set_loaded_region_centers, "centers");
+     BIND_METHOD_NO_PARAMETERS(World, simulate_dynamic);
++    BIND_METHOD_NO_PARAMETERS(World, refresh_dynamic_visuals);
++    BIND_METHOD(World, apply_coop_patch, "data", "prefix");
++    BIND_METHOD_NO_PARAMETERS(World, process_coop_updates);
+     BIND_METHOD(World, is_position_loaded, "position");
+     BIND_METHOD(World, is_position_loading, "position");
+     BIND_METHOD(World, snap_to_chunk, "position");
+@@ -143,6 +148,9 @@ void World::start_up() {
+ 
+ // Called every time a world is loaded
+ void World::initialize() {
++    center_chunk = Vector3i();
++    nx_loaded_centers.clear();
++    nx_prepared_radius = -1;
+     generator->world = this;
+     generator->initialize();
+ 
+@@ -150,25 +158,34 @@ void World::initialize() {
+ }
+ 
+ void World::instantiate_chunks() {
+-    center_chunk = Vector3i(0, 0, 0);
++    const int center_count = MAX(1, int(nx_loaded_centers.size()));
++    if (nx_pool_radius == instance_radius && nx_pool_centers == center_count && !all_chunks.empty()) return;
++    nx_pool_radius = instance_radius;
++    nx_pool_centers = center_count;
+ 
+     int existing_count = all_chunks.size();
+     int required_count = 0;
++    TypedDictionary<Vector3i, bool> required_positions;
++    std::vector<Vector3i> pool_centers = nx_loaded_centers;
++    if (pool_centers.empty()) pool_centers.push_back(center_chunk);
+     int64_t max_y = instance_radius / Chunk::CHUNK_SIZE_Y; int64_t min_y = -max_y;
+     int64_t max_x = instance_radius / Chunk::CHUNK_SIZE_X; int64_t min_x = -max_x;
+     int64_t max_z = instance_radius / Chunk::CHUNK_SIZE_Z; int64_t min_z = -max_z;
++    for (const Vector3i &pool_center : pool_centers) {
+     for (int64_t chunk_y = min_y; chunk_y <= max_y; chunk_y++) {
+     for (int64_t chunk_x = min_x; chunk_x <= max_x; chunk_x++) {
+     for (int64_t chunk_z = min_z; chunk_z <= max_z; chunk_z++) {
+-        Vector3i coordinate = center_chunk + Vector3i(Chunk::CHUNK_SIZE_X * chunk_x, Chunk::CHUNK_SIZE_Y * chunk_y, Chunk::CHUNK_SIZE_Z * chunk_z);
+-        if (!is_chunk_in_radius(coordinate, instance_radius)) {
++        Vector3i coordinate = pool_center + Vector3i(Chunk::CHUNK_SIZE_X * chunk_x, Chunk::CHUNK_SIZE_Y * chunk_y, Chunk::CHUNK_SIZE_Z * chunk_z);
++        if ((coordinate - pool_center).length_squared() >= instance_radius * instance_radius || required_positions.has(coordinate)) {
+             continue;
+         }
++        required_positions[coordinate] = true;
+         required_count++;
+     }
+     }
+     }
+ 
++    }
+     for (int i = existing_count; i < required_count; i++) {
+         instantiate_chunk();
+     }
+@@ -206,6 +223,9 @@ Chunk* World::instantiate_chunk() {
+ }
+ 
+ void World::clear() {
++    nx_coop_mesh_queue.clear();
++    nx_loaded_centers.clear();
++    nx_prepared_radius = -1;
+     for (uint64_t i = 0; i < all_chunks.size(); i++) {
+         all_chunks[i]->queue_free();
+     }
+@@ -346,6 +366,23 @@ void World::force_reload() {
+     all_loaded = false;
+ }
+ 
++void World::set_loaded_region_centers(Array centers) {
++    std::vector<Vector3i> next;
++    for (int i = 0; i < centers.size() && next.size() < 4; ++i) {
++        if (centers[i].get_type() != Variant::VECTOR3) continue;
++        Vector3 position = centers[i];
++        if (!position.is_finite() || position.length_squared() > 1.0e14) continue;
++        Vector3i coordinate = snap_to_chunk(position);
++        if (std::find(next.begin(), next.end(), coordinate) == next.end()) next.push_back(coordinate);
++    }
++    if (next != nx_loaded_centers) {
++        nx_loaded_centers = next;
++        nx_pool_radius = -1;
++        nx_prepared_radius = -1;
++        all_loaded = false;
++    }
++}
++
+ void World::set_loaded_region_center(Vector3 new_center) {
+     Vector3i new_center_chunk = snap_to_chunk(new_center);
+     if (new_center_chunk != center_chunk || !all_loaded) {
+@@ -410,6 +447,13 @@ void World::update_loaded_region() {
+         has_task = false;
+     }
+ 
++    instantiate_chunks();
++    std::vector<Vector3i> nx_centers = nx_loaded_centers;
++    if (nx_centers.empty()) nx_centers.push_back(center_chunk);
++    if (nx_centers.size() > 1) {
++        const auto offset = nx_center_cursor++ % nx_centers.size();
++        std::rotate(nx_centers.begin(), nx_centers.begin() + offset, nx_centers.end());
++    }
+     init_queue.clear();
+     init_queue_positions.clear();
+     init_queue_done.clear();
+@@ -417,6 +461,11 @@ void World::update_loaded_region() {
+     bool all_decorations_generated = true;
+     bool all_structures_generated = true;
+ 
++#ifdef __SWITCH__
++    // Once per center/radius, not once per four-chunk worker batch. A cleared
++    // map also invalidates this cache when a different world starts at (0,0,0).
++    if (nx_prepared_center != center_chunk || nx_prepared_radius != instance_radius || !decoration_map.has(center_chunk)) {
++#endif
+     // Remove far away decorations if memory is starting to clog up
+     TypedArray<Vector3i> decorated_vectors = decoration_map.keys();
+     for (int i = 0; i < decorated_vectors.size(); i++) {
+@@ -443,11 +492,12 @@ void World::update_loaded_region() {
+     int64_t deco_radius_x = 2 + instance_radius / Chunk::CHUNK_SIZE_X;
+     int64_t deco_radius_y = 2 + instance_radius / Chunk::CHUNK_SIZE_Y;
+     int64_t deco_radius_z = 2 + instance_radius / Chunk::CHUNK_SIZE_Z;
++    for (const Vector3i &nx_center : nx_centers) {
+     for (int64_t y = -deco_radius_y; y <= deco_radius_y; y++) {
+     for (int64_t x = -deco_radius_x; x <= deco_radius_x; x++) {
+     for (int64_t z = -deco_radius_z; z <= deco_radius_z; z++) {
+ 
+-        Vector3i coordinate = Vector3i(Chunk::CHUNK_SIZE_X * x, Chunk::CHUNK_SIZE_Y * y, Chunk::CHUNK_SIZE_Z * z) + center_chunk;
++        Vector3i coordinate = Vector3i(Chunk::CHUNK_SIZE_X * x, Chunk::CHUNK_SIZE_Y * y, Chunk::CHUNK_SIZE_Z * z) + nx_center;
+ 
+         // Don't check for radius here
+ 
+@@ -462,16 +512,24 @@ void World::update_loaded_region() {
+     }
+     }
+ 
++    }
++#ifdef __SWITCH__
++        nx_prepared_center = center_chunk;
++        nx_prepared_radius = instance_radius;
++    }
++    int64_t deco_radius_x, deco_radius_y, deco_radius_z;
++#endif
+     deco_radius_x = 1 + instance_radius / Chunk::CHUNK_SIZE_X;
+     deco_radius_y = 1 + instance_radius / Chunk::CHUNK_SIZE_Y;
+     deco_radius_z = 1 + instance_radius / Chunk::CHUNK_SIZE_Z;
+ 
++    for (const Vector3i &nx_center : nx_centers) {
+     // Structure initialization
+     for (int64_t y = -deco_radius_y; y <= deco_radius_y; y++) {
+     for (int64_t x = -deco_radius_x; x <= deco_radius_x; x++) {
+     for (int64_t z = -deco_radius_z; z <= deco_radius_z; z++) {
+ 
+-        Vector3i coordinate = Vector3i(Chunk::CHUNK_SIZE_X * x, Chunk::CHUNK_SIZE_Y * y, Chunk::CHUNK_SIZE_Z * z) + center_chunk;
++        Vector3i coordinate = Vector3i(Chunk::CHUNK_SIZE_X * x, Chunk::CHUNK_SIZE_Y * y, Chunk::CHUNK_SIZE_Z * z) + nx_center;
+         Vector3i structure_coordinate = snap_to_nearest_structure(coordinate);
+         if (!structure_map.has(structure_coordinate)) {
+             all_structures_generated = false;
+@@ -482,13 +540,15 @@ void World::update_loaded_region() {
+     }
+     }
+ 
++    }
+     // Decoration initialization
+     if (all_structures_generated) {
++        for (const Vector3i &nx_center : nx_centers) {
+         for (int64_t y = -deco_radius_y; y <= deco_radius_y; y++) {
+         for (int64_t x = -deco_radius_x; x <= deco_radius_x; x++) {
+         for (int64_t z = -deco_radius_z; z <= deco_radius_z; z++) {
+ 
+-            Vector3i coordinate = Vector3i(Chunk::CHUNK_SIZE_X * x, Chunk::CHUNK_SIZE_Y * y, Chunk::CHUNK_SIZE_Z * z) + center_chunk;
++            Vector3i coordinate = Vector3i(Chunk::CHUNK_SIZE_X * x, Chunk::CHUNK_SIZE_Y * y, Chunk::CHUNK_SIZE_Z * z) + nx_center;
+ 
+             if (!is_chunk_in_radius(coordinate, instance_radius + 1 * Chunk::CHUNK_SIZE_X) || decoration_generated.has(coordinate)) {
+                 continue;
+@@ -500,6 +560,7 @@ void World::update_loaded_region() {
+         }
+         }
+         }
++        }
+     }
+ 
+     if (all_structures_generated && all_decorations_generated) {
+@@ -517,6 +578,7 @@ void World::update_loaded_region() {
+ 
+         // Loop through the spherical region around the center and generate chunks
+         // Use a different ordering to generate closer chunks first -- helps reduce jarring loading barriers
++        for (const Vector3i &nx_center : nx_centers) {
+         for (int64_t chunk_y = 0; chunk_y <= 2 * instance_radius / Chunk::CHUNK_SIZE_Y - 2; chunk_y++) {
+             int64_t actual_chunk_y = (chunk_y % 2 == 0) ? -chunk_y / 2 : (chunk_y + 1) / 2;
+ 
+@@ -529,12 +591,17 @@ void World::update_loaded_region() {
+             Vector3i coordinate = Vector3i(
+                 Chunk::CHUNK_SIZE_X * actual_chunk_x,
+                 Chunk::CHUNK_SIZE_Y * actual_chunk_y,
+-                Chunk::CHUNK_SIZE_Z * actual_chunk_z) + center_chunk;
++                Chunk::CHUNK_SIZE_Z * actual_chunk_z) + nx_center;
+ 
+             if (is_chunk_loaded.has(coordinate) || !is_chunk_in_radius(coordinate, instance_radius)) {
                  continue;
              }
  
@@ -64,16 +387,26 @@
 +            // Keep only four CPU meshes awaiting GPU/collision finalization.
 +            if (init_queue.size() >= 4) continue;
 +#endif
++            if (available_chunks.empty()) continue;
              Chunk* new_chunk = available_chunks.back();
              available_chunks.pop_back();
  
-@@ -679,23 +683,30 @@
+@@ -555,6 +622,7 @@ void World::update_loaded_region() {
+         }
+         }
+ 
++        }
+         if (any_chunks_unloaded) {
+             emit_signal("chunk_unloaded", Vector3i(0, 0, 0));   
+         }
+@@ -679,33 +747,52 @@ void World::initialize_structure(uint64_t index) {
  }
  
  void World::simulate_dynamic() {
 -    int64_t chunk_radius_x = water_simulate_radius / Chunk::CHUNK_SIZE_X;
 -    int64_t chunk_radius_y = water_simulate_radius / Chunk::CHUNK_SIZE_Y;
 -    int64_t chunk_radius_z = water_simulate_radius / Chunk::CHUNK_SIZE_Z;
+-
 +#ifdef __SWITCH__
 +    // Unloaded chunks cannot simulate; avoid scanning the 64-block cube when
 +    // the loaded region is smaller (32-block profile: 250 vs 1458 lookups).
@@ -84,12 +417,24 @@
 +    int64_t chunk_radius_x = simulation_radius / Chunk::CHUNK_SIZE_X;
 +    int64_t chunk_radius_y = simulation_radius / Chunk::CHUNK_SIZE_Y;
 +    int64_t chunk_radius_z = simulation_radius / Chunk::CHUNK_SIZE_Z;
- 
++
++#ifdef __SWITCH__
++    static uint64_t nx_water_start = 0, nx_sim_us = 0, nx_mesh_us = 0, nx_mesh_max = 0;
++    static uint32_t nx_water_samples = 0, nx_mesh_uploads = 0;
++    const uint64_t nx_begin = Time::get_singleton()->get_ticks_usec();
++    if (!nx_water_start) nx_water_start = nx_begin;
++#endif
      // First, advance the water + fire simulation of all chunks in range
      simulated_water_subchunks = 0;
      int simulated_chunks = 0;
      int rendered_chunks = 0;
 -    for (int64_t chunk_y = 0; chunk_y <= 2 * water_simulate_radius / Chunk::CHUNK_SIZE_Y; chunk_y++) {
++    std::vector<Vector3i> nx_sim_centers = nx_loaded_centers;
++    if (nx_sim_centers.empty()) nx_sim_centers.push_back(center_chunk);
++    if (nx_sim_centers.size() == 2 && (water_direction & 1)) std::swap(nx_sim_centers[0], nx_sim_centers[1]);
++    TypedDictionary<Vector3i, bool> nx_simulated_cells;
++    if (!nx_visual_only) {
++    for (const Vector3i &nx_center : nx_sim_centers) {
 +    for (int64_t chunk_y = 0; chunk_y <= 2 * simulation_radius / Chunk::CHUNK_SIZE_Y; chunk_y++) {
          int64_t actual_chunk_y = (chunk_y % 2 == 0) ? -chunk_y / 2 : (chunk_y + 1) / 2;
          if ((water_direction / 2) % 2) actual_chunk_y = -actual_chunk_y;
@@ -104,8 +449,11 @@
          int64_t actual_chunk_z = (chunk_z % 2 == 0) ? -chunk_z / 2 : (chunk_z + 1) / 2;
          if ((water_direction / 4) % 2) actual_chunk_z = -actual_chunk_z;
  
-@@ -705,7 +716,7 @@
-             Chunk::CHUNK_SIZE_Z * actual_chunk_z) + center_chunk;
+         Vector3i coordinate = Vector3i(
+             Chunk::CHUNK_SIZE_X * actual_chunk_x,
+             Chunk::CHUNK_SIZE_Y * actual_chunk_y,
+-            Chunk::CHUNK_SIZE_Z * actual_chunk_z) + center_chunk;
++            Chunk::CHUNK_SIZE_Z * actual_chunk_z) + nx_center;
  
          // Simulate chunks in a staggered way to reduce load each frame
 -        if ((int64_t) UtilityFunctions::abs(chunk_x + chunk_y + chunk_x) % WATER_SKIP != water_frame) {
@@ -113,7 +461,7 @@
              continue;
          }
  
-@@ -714,7 +725,7 @@
+@@ -714,11 +801,15 @@ void World::simulate_dynamic() {
              continue;
          }
  
@@ -122,11 +470,57 @@
              continue;
          }
  
-@@ -729,15 +740,15 @@
+         Chunk* chunk = Object::cast_to<Chunk>(chunk_map[coordinate]);
++        if (nx_sim_centers.size() > 1) {
++            if (nx_simulated_cells.has(coordinate)) continue;
++            nx_simulated_cells[coordinate] = true;
++        }
+         chunk->simulate_water();
+         chunk->simulate_fire();
+         simulated_chunks++;
+@@ -726,18 +817,53 @@ void World::simulate_dynamic() {
+     }
+     }
+ 
++    }
++    }
++
      // Then, render any updated chunks +
      // Render all fire / water surfaces of chunks that were recently loaded
++#ifdef __SWITCH__
++    // Bound mesh uploads, including the previously unbounded first surface
++    // generation path. Rotate through the whole loaded cube to avoid starving
++    // distant chunks behind continuously moving water beside the player.
++    const uint64_t nx_sim_done = Time::get_singleton()->get_ticks_usec();
      rendered_water_chunks = 0;
 -    for (int64_t chunk_y = 0; chunk_y <= 2 * water_simulate_radius / Chunk::CHUNK_SIZE_Y; chunk_y++) {
++    const int side = 2 * simulation_radius / Chunk::CHUNK_SIZE_X + 1;
++    const int single_volume = side * side * side;
++    const int volume = single_volume * nx_sim_centers.size();
++    for (int checked = 0; checked < volume; ++checked) {
++        const uint32_t candidate = nx_water_render_cursor++ % volume;
++        const uint32_t index = candidate % single_volume;
++        const Vector3i coordinate = nx_sim_centers[candidate / single_volume] + Vector3i(
++            (int(index % side) - side / 2) * Chunk::CHUNK_SIZE_X,
++            (int(index / (side * side)) - side / 2) * Chunk::CHUNK_SIZE_Y,
++            (int(index / side % side) - side / 2) * Chunk::CHUNK_SIZE_Z);
++        if (!is_chunk_loaded.has(coordinate) || !is_chunk_loaded[coordinate] || !is_chunk_in_radius(coordinate, simulation_radius)) continue;
++        Chunk *chunk = Object::cast_to<Chunk>(chunk_map[coordinate]);
++        if (chunk->water_updated > 0) {
++            chunk->generate_water_mesh(false, coordinate, true);
++            chunk->generate_water_surface_mesh(false, coordinate, true);
++            chunk->water_updated--;
++            chunk->water_render_wait = 0;
++        } else if (!chunk->water_surface_meshed && is_position_loaded(Vector3(coordinate) + Vector3(8, 24, 8))) {
++            chunk->generate_water_surface_mesh(false, coordinate, true);
++        } else {
++            continue;
++        }
++        ++rendered_water_chunks;
++        break; // At most one water chunk upload per displayed frame.
++    }
++#else
++    rendered_water_chunks = 0;
 +    for (int64_t chunk_y = 0; chunk_y <= 2 * simulation_radius / Chunk::CHUNK_SIZE_Y; chunk_y++) {
          int64_t actual_chunk_y = (chunk_y % 2 == 0) ? -chunk_y / 2 : (chunk_y + 1) / 2;
          if ((water_direction / 2) % 2) actual_chunk_y = -actual_chunk_y;
@@ -141,7 +535,7 @@
          int64_t actual_chunk_z = (chunk_z % 2 == 0) ? -chunk_z / 2 : (chunk_z + 1) / 2;
          if ((water_direction / 4) % 2) actual_chunk_z = -actual_chunk_z;
  
-@@ -746,7 +757,7 @@
+@@ -746,7 +872,7 @@ void World::simulate_dynamic() {
              Chunk::CHUNK_SIZE_Y * actual_chunk_y,
              Chunk::CHUNK_SIZE_Z * actual_chunk_z) + center_chunk;
  
@@ -150,7 +544,141 @@
              continue;
          }
  
-@@ -1535,7 +1546,11 @@
+@@ -778,6 +904,26 @@ void World::simulate_dynamic() {
+     }
+     }
+ 
++#endif
++
++#ifdef __SWITCH__
++    const uint64_t nx_end = Time::get_singleton()->get_ticks_usec();
++    const uint64_t nx_mesh_elapsed = nx_end - nx_sim_done;
++    nx_sim_us += nx_sim_done - nx_begin;
++    nx_mesh_us += nx_mesh_elapsed;
++    nx_mesh_max = nx_mesh_elapsed > nx_mesh_max ? nx_mesh_elapsed : nx_mesh_max;
++    nx_mesh_uploads += rendered_water_chunks;
++    ++nx_water_samples;
++    if (nx_end - nx_water_start >= 5000000) {
++        UtilityFunctions::print("[nx-water] samples=", nx_water_samples,
++            " sim_avg_ms=", double(nx_sim_us) / nx_water_samples / 1000.0,
++            " mesh_avg_ms=", double(nx_mesh_us) / nx_water_samples / 1000.0,
++            " mesh_max_ms=", double(nx_mesh_max) / 1000.0,
++            " uploads=", nx_mesh_uploads);
++        nx_water_start = nx_end; nx_sim_us = 0; nx_mesh_us = 0; nx_mesh_max = 0;
++        nx_water_samples = 0; nx_mesh_uploads = 0;
++    }
++#endif
+     // UtilityFunctions::print("Simulation: ", simulated_chunks, " simulated, ", rendered_chunks, " rendered");
+     water_frame = (water_frame + 1) % WATER_SKIP;
+     water_direction = (water_direction + 1) % 8;
+@@ -840,9 +986,11 @@ bool World::is_position_loading(Vector3 position) const {
+ 
+ // Assumes the chunk is loaded
+ Chunk* World::get_chunk_at(Vector3 position) {
++    if (!position.is_finite()) return nullptr;
+     position = position.floor();
+-
+-    return Object::cast_to<Chunk>(chunk_map[snap_to_chunk(position)]);
++    const Vector3i coordinate = snap_to_chunk(position);
++    if (!chunk_map.has(coordinate)) return nullptr;
++    return Object::cast_to<Chunk>(chunk_map[coordinate]);
+ }
+ 
+ Vector3i World::snap_to_chunk(Vector3 position) const {
+@@ -967,18 +1115,22 @@ Vector3i World::find_closest_cutscene_block(Vector3 starting_position, TypedDict
+ }
+ 
+ bool World::is_chunk_in_radius(Vector3i coordinate, int64_t radius) const {
+-    if (radius <= 112) {
+-        return (center_chunk - coordinate).length_squared() < radius * radius;
+-    } else { // Add a little bias for large radii since we don't usually need to see super high up
+-        return (Vector3(center_chunk - coordinate) * Vector3(1, 1.5, 1)).length_squared() < radius * radius;
+-    }
+-    
++    auto inside = [&](Vector3i center) {
++        if (radius <= 112) return (center - coordinate).length_squared() < radius * radius;
++        return (Vector3(center - coordinate) * Vector3(1, 1.5, 1)).length_squared() < radius * radius;
++    };
++    if (nx_loaded_centers.empty()) return inside(center_chunk);
++    for (const Vector3i &center : nx_loaded_centers) if (inside(center)) return true;
++    return false;
+ }
+ 
+ Ref<Block> World::get_block_type_at(Vector3 position) {
+     position = position.floor();
+ 
+     Chunk* chunk = get_chunk_at(position);
++    // Timers and entities can outlive a streamed chunk. Reads observe empty
++    // space until it is loaded again; they must never dereference a null chunk.
++    if (chunk == nullptr) return block_types[0];
+     return block_types[chunk->get_block_index_at_global(Vector3i(position))];
+ }
+ 
+@@ -995,6 +1147,7 @@ void World::break_block_at(Vector3 position, bool play_effect, bool override_res
+     position = position.floor();
+ 
+     Chunk* chunk = get_chunk_at(position);
++    if (chunk == nullptr) return;
+     Ref<Block> block_type = get_block_type_at(position);
+ 
+     // Fail to break cutscene blocks
+@@ -1145,6 +1298,7 @@ void World::place_block_at(Vector3 position, Ref<Block> block_type, bool play_ef
+     position = position.floor();
+ 
+     Chunk* chunk = get_chunk_at(position);
++    if (chunk == nullptr || block_type.is_null()) return;
+     bool success = chunk->place_block_at(Vector3i(position), block_type->index, immediate_remesh);
+ 
+     if (!success) {
+@@ -1236,12 +1390,14 @@ void World::place_water_at(Vector3 position, uint8_t amount) {
+     position = position.floor();
+ 
+     Chunk* chunk = get_chunk_at(position);
++    if (chunk == nullptr) return;
+     chunk->set_water_at(Vector3i(position - chunk->get_global_position()), amount);
+ }
+ 
+ uint8_t World::get_water_level_at(Vector3 position) {
+     position = position.floor();
+     Chunk* chunk = get_chunk_at(position);
++    if (chunk == nullptr) return 0;
+     return chunk->get_water_at(Vector3i(position - chunk->get_global_position()));
+ }
+ 
+@@ -1262,18 +1418,21 @@ bool World::is_under_water(Vector3 position) {
+ void World::place_fire_at(Vector3 position, uint8_t amount) {
+     position = position.floor();
+     Chunk* chunk = get_chunk_at(position);
++    if (chunk == nullptr) return;
+     chunk->set_fire_at(Vector3i(position - chunk->get_global_position()), amount);
+ }
+ 
+ uint8_t World::get_fire_at(Vector3 position) {
+     position = position.floor();
+     Chunk* chunk = get_chunk_at(position);
++    if (chunk == nullptr) return 0;
+     return chunk->get_fire_at(Vector3i(position - chunk->get_global_position()));
+ }
+ 
+ bool World::fire_eligible(Vector3 position) {
+     position = position.floor();
+     Chunk* chunk = get_chunk_at(position);
++    if (chunk == nullptr) return false;
+     return chunk->fire_eligible(Vector3i(position - chunk->get_global_position()));
+ }
+ 
+@@ -1288,8 +1447,8 @@ bool World::is_chunk_modified(Vector3 position) {
+ }
+ 
+ void World::modify_chunk(Vector3 position) {
+-    Vector3i chunk_position = snap_to_chunk(position);
+-    Chunk* chunk = Object::cast_to<Chunk>(chunk_map[chunk_position]);
++    Chunk* chunk = get_chunk_at(position);
++    if (chunk == nullptr) return;
+     chunk->modified = true;
+     chunk->dirty = true;
+ }
+@@ -1535,7 +1694,11 @@ void World::measure_elapsed_time() {
  
  
  void World::set_instance_radius(int64_t new_radius) {
@@ -162,3 +690,72 @@
  }
  
  void World::refresh_instance_radius() {
+@@ -1582,3 +1745,68 @@ DEFINE_PROPERTY_GETTER_SETTER(World, Ref<Generator>, generator);
+ DEFINE_PROPERTY_GETTER_SETTER(World, TypedArray<ShaderMaterial>, requires_texture_atlas);
+ DEFINE_PROPERTY_GETTER_SETTER(World, TypedArray<Block>, block_types);
+ DEFINE_PROPERTY_GETTER_SETTER(World, TypedArray<Decoration>, decorations);
++
++
++void World::refresh_dynamic_visuals() {
++    nx_visual_only = true;
++    simulate_dynamic();
++    nx_visual_only = false;
++}
++
++bool World::apply_coop_patch(Dictionary data, String prefix) {
++    if (!all_loaded || has_task || finalizing_chunks) return false;
++    load_data(data, prefix);
++    TypedArray<Vector3i> coordinates = is_chunk_loaded.keys();
++    for (int c = 0; c < coordinates.size(); ++c) {
++        Vector3i coordinate = coordinates[c];
++        if (!is_chunk_loaded[coordinate] || !chunk_data.has(coordinate)) continue;
++        Chunk *chunk = Object::cast_to<Chunk>(chunk_map[coordinate]);
++        PackedInt32Array next = chunk_data[coordinate];
++        if (next.size() != Chunk::CHUNK_SIZE_X * Chunk::CHUNK_SIZE_Y * Chunk::CHUNK_SIZE_Z) continue;
++        bool changed = chunk->blocks != next;
++        if (changed) {
++            for (int i = 0; i < next.size(); ++i) {
++                int before = chunk->blocks[i], after = next[i];
++                if (before == after) continue;
++                Vector3i at = coordinate + chunk->index_to_position(i);
++                if (is_block_living[before]) { kill_block(at); living_block_map.erase(at); }
++                if (is_block_living[after]) liven_block(at, block_types[after]);
++            }
++            chunk->blocks = next;
++            nx_coop_mesh_queue[coordinate] = true;
++            for (const Vector3i &offset : {Vector3i(Chunk::CHUNK_SIZE_X, 0, 0), Vector3i(-Chunk::CHUNK_SIZE_X, 0, 0), Vector3i(0, Chunk::CHUNK_SIZE_Y, 0), Vector3i(0, -Chunk::CHUNK_SIZE_Y, 0), Vector3i(0, 0, Chunk::CHUNK_SIZE_Z), Vector3i(0, 0, -Chunk::CHUNK_SIZE_Z)}) {
++                const Vector3i adjacent = coordinate + offset;
++                if (is_chunk_loaded.has(adjacent) && is_chunk_loaded[adjacent]) nx_coop_mesh_queue[adjacent] = true;
++            }
++            chunk->modified = true;
++            chunk->dirty = true;
++        }
++        if (chunk_water_data.has(coordinate)) {
++            PackedByteArray next_water = chunk_water_data[coordinate];
++            if (next_water.size() == chunk->water.size() && chunk->water != next_water) {
++                chunk->water = next_water;
++                chunk->water_updated = 1;
++                nx_coop_mesh_queue[coordinate] = true;
++            }
++        }
++        if (chunk_fire_data.has(coordinate)) {
++            PackedByteArray next_fire = chunk_fire_data[coordinate];
++            if (next_fire.size() == chunk->fire.size()) chunk->fire = next_fire;
++        }
++        if (chunk_water_awake_data.has(coordinate)) chunk->water_chunk_awake = chunk_water_awake_data[coordinate];
++    }
++    return true;
++}
++
++void World::process_coop_updates() {
++    if (has_task || finalizing_chunks || nx_coop_mesh_queue.is_empty()) return;
++    TypedArray<Vector3i> coordinates = nx_coop_mesh_queue.keys();
++    Vector3i coordinate = coordinates[0];
++    nx_coop_mesh_queue.erase(coordinate);
++    if (!is_chunk_loaded.has(coordinate) || !is_chunk_loaded[coordinate]) return;
++    Chunk *chunk = Object::cast_to<Chunk>(chunk_map[coordinate]);
++    chunk->calculate_block_statistics();
++    chunk->generate_mesh(true, coordinate);
++    chunk->generate_water_mesh(false, coordinate, true);
++    chunk->generate_water_surface_mesh(false, coordinate, true);
++}

@@ -1,0 +1,7 @@
+--- a/main/world/living_block/cache_cube/hopper.gd
++++ b/main/world/living_block/cache_cube/hopper.gd
+@@ -30,3 +30,4 @@
+ 
+ 		if remaining_item == null:
+ 			dropped_item.collect()
++

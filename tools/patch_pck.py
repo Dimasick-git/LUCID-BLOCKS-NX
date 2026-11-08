@@ -3,10 +3,15 @@ from pathlib import Path
 import argparse,hashlib,json,struct
 from inspect_pck import inspect,MAGIC
 
-def patch(source,destination,replacements):
+def patch(source,destination,replacements,additions=None):
+    additions=additions or {}
     inventory=inspect(source)
     names={e['path'] for e in inventory['entries']}
     if set(replacements)-names:raise ValueError('Replacement does not exist in original pack')
+    if set(additions)&names:raise ValueError('Added resource already exists')
+    for name in additions:
+        if not name.startswith('NxPort/') or '..' in name.split('/') or ':' in name or '\\' in name:
+            raise ValueError('New resources must stay inside NxPort/')
     records=[];header=bytearray(112);struct.pack_into('<6I',header,0,MAGIC,3,4,6,0,2);struct.pack_into('<Q',header,24,112)
     with Path(source).open('rb') as src,Path(destination).open('xb') as out:
         out.write(header)
@@ -24,14 +29,17 @@ def patch(source,destination,replacements):
             if replacement:stream.close()
             elif digest.hexdigest()!=entry['md5']:raise ValueError('Original checksum failed: '+entry['path'])
             records.append((entry['path'],offset,written,digest.digest()))
+        for name,path in sorted(additions.items()):
+            data=Path(path).read_bytes();out.write(bytes((-out.tell())%16));offset=out.tell()-112
+            out.write(data);records.append((name,offset,len(data),hashlib.md5(data).digest()))
         directory=out.tell();out.write(struct.pack('<I',len(records)))
         for name,offset,size,md5 in records:
             encoded=name.encode('utf-8');encoded+=bytes((-len(encoded))%4)
             out.write(struct.pack('<I',len(encoded))+encoded+struct.pack('<QQ',offset,size)+md5+struct.pack('<I',0))
         out.seek(32);out.write(struct.pack('<Q',directory))
     result=inspect(destination)
-    assert result['entry_count']==inventory['entry_count']
-    return {'file':str(Path(destination).resolve()),'entries':len(records),'replaced':sorted(replacements),'bytes':Path(destination).stat().st_size,'original_resource_checksums_verified':True}
+    assert result['entry_count']==inventory['entry_count']+len(additions)
+    return {'file':str(Path(destination).resolve()),'entries':len(records),'original_entries':inventory['entry_count'],'added':sorted(additions),'replaced':sorted(replacements),'bytes':Path(destination).stat().st_size,'original_resource_checksums_verified':True}
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('source',type=Path);p.add_argument('output',type=Path);p.add_argument('--replace',action='append',default=[]);a=p.parse_args();replacements={}

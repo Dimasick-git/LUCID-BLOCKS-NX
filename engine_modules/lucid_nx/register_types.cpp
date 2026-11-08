@@ -2,6 +2,7 @@
 #include "core/extension/gdextension_manager.h"
 #include "core/error/error_macros.h"
 #include "core/string/print_string.h"
+#include "nx_platform.h"
 
 extern "C" GDExtensionBool gdblocks_init(GDExtensionInterfaceGetProcAddress,
     GDExtensionClassLibraryPtr, GDExtensionInitialization *);
@@ -10,6 +11,7 @@ void initialize_lucid_nx_module(ModuleInitializationLevel level) {
     // Core GDExtension interfaces exist now, and SCENE extension callbacks
     // will run immediately after this module initialization phase.
     if (level != MODULE_INITIALIZATION_LEVEL_SCENE) return;
+    ClassDB::register_class<NxPlatform>();
     auto *manager = GDExtensionManager::get_singleton();
     ERR_FAIL_NULL(manager);
     static const GDExtensionInitializationFunction entry = &gdblocks_init;

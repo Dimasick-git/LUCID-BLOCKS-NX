@@ -1,0 +1,9 @@
+--- a/main/entity/player/player.gd
++++ b/main/entity/player/player.gd
+@@ -702,3 +702,6 @@
+ 		return true
+ 	var block: Block = Ref.world.get_block_type_at(p)
+ 	return block.no_collision_block
++
++func _get_local_action_state() -> int:
++    return int(%PlayerHand.current_hand.state) if %PlayerHand.current_hand != null else 0

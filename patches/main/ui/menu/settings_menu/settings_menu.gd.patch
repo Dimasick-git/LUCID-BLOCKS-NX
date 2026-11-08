@@ -1,9 +1,16 @@
 --- a/main/ui/menu/settings_menu/settings_menu.gd
 +++ b/main/ui/menu/settings_menu/settings_menu.gd
-@@ -47,6 +47,10 @@
+@@ -43,10 +43,17 @@
+ var ignore_next_preset_change: bool = false
+ var last_selected_preset: int = SettingsManager.MEDIUM
+ 
++var nx_language_option: OptionButton
++
+ signal saved
  
  
  func _ready() -> void :
++	_nx_add_language_row()
 +	if OS.has_feature("switch"):
 +		%RenderDistanceSpinBox.min_value = 32
 +		%RenderDistanceSpinBox.max_value = 64
@@ -11,3 +18,56 @@
  	for control in settings_map:
  		settings_map_inverse[settings_map[control]] = control
  
+@@ -120,6 +127,9 @@
+ 			control.color = value
+ 
+ 	%GraphicsPresetButton.selected = preset
++	var nx_language := "en" if default else str(Ref.save_file_manager.settings_file.get_data("language", "en"))
++	nx_language_option.select(1 if nx_language == "ru" else 0)
++	NxLocale.set_language(nx_language)
+ 	%SkinContainer.visible = Ref.save_file_manager.soul_file.get_data("color", false)
+ 
+ 	%HotkeyRemapperKB.initialize_hotkeys(default)
+@@ -129,6 +139,7 @@
+ func finalize_edit(skip_hotkeys: bool = false) -> void :
+ 	print("Settings finalized, hotkeys skipped: ", skip_hotkeys)
+ 
++	Ref.save_file_manager.settings_file.set_data("language", "ru" if nx_language_option.selected == 1 else "en")
+ 	Ref.save_file_manager.settings_file.set_data("graphics_preset", %GraphicsPresetButton.selected)
+ 
+ 	Ref.save_file_manager.device_file.set_data("last_graphics_preset", last_selected_preset)
+@@ -192,3 +203,34 @@
+ func deactivate() -> void :
+ 	super.deactivate()
+ 	set_process_input(false)
++
++
++func _nx_add_language_row() -> void:
++    var row := HBoxContainer.new()
++    row.name = "NxLanguageRow"
++    var label := Label.new()
++    label.text = "Language"
++    label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
++    row.add_child(label)
++    nx_language_option = OptionButton.new()
++    nx_language_option.name = "NxLanguage"
++    nx_language_option.add_item("English")
++    nx_language_option.add_item("Русский")
++    nx_language_option.item_selected.connect(_nx_language_selected)
++    row.add_child(nx_language_option)
++    var parent := %TabContainer.get_node("Display/MarginContainer/Graphics")
++    parent.add_child(row)
++    parent.move_child(row, 0)
++    NxLocale.language_changed.connect(_nx_update_tab_names)
++    _nx_update_tab_names()
++
++func _nx_language_selected(index: int) -> void:
++    NxLocale.set_language("ru" if index == 1 else "en")
++
++func _nx_update_tab_names() -> void:
++    %RenderDistanceSpinBox.suffix = NxLocale.text("blocks")
++    %FOVSpinBox.suffix = NxLocale.text("degrees")
++    %FpsSpinbox.suffix = NxLocale.text("fps")
++    var tabs: TabContainer = %TabContainer
++    for i in range(tabs.get_tab_count()):
++        tabs.set_tab_title(i, NxLocale.text(str(tabs.get_tab_control(i).name)))

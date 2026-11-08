@@ -1,0 +1,15 @@
+--- a/main/ui/menu/game_menu/equipment_screen/stat_boost_container.gd
++++ b/main/ui/menu/game_menu/equipment_screen/stat_boost_container.gd
+@@ -32,9 +32,9 @@
+ 		var new_panel: StatPanel = stat_panel_scene.instantiate()
+ 		add_child(new_panel)
+ 		if descriptions[key] is int:
+-			new_panel.initialize(key, "+%d %s" % [descriptions[key], key])
++			new_panel.initialize(key, "+%d %s" % [descriptions[key], tr(key)])
+ 		else:
+ 			if descriptions[key] >= 0:
+-				new_panel.initialize(key, "+%.0f" % (100 * descriptions[key]) + "% " + key)
++				new_panel.initialize(key, "+%.0f" % (100 * descriptions[key]) + "% " + tr(key))
+ 			else:
+-				new_panel.initialize(key, "%.0f" % (100 * descriptions[key]) + "% " + key)
++				new_panel.initialize(key, "%.0f" % (100 * descriptions[key]) + "% " + tr(key))

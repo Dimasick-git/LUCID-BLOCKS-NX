@@ -1,0 +1,45 @@
+--- a/main/entity/yhvh/yhvh.gd
++++ b/main/entity/yhvh/yhvh.gd
+@@ -167,7 +167,7 @@
+ 	var new_comet: Comet = comet_scene.instantiate()
+ 	get_tree().get_root().add_child(new_comet)
+ 	new_comet.entity_owner = self
+-	new_comet.shoot(offset + Ref.player.global_position, direction)
++	new_comet.shoot(offset + Ref.nx_target_position(global_position), direction)
+ 
+ 
+ 
+@@ -179,7 +179,7 @@
+ 		return
+ 	var offset: Vector3 = randf_range(0, spawn_radius) * Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized() + Vector3(0, comet_height, 0)
+ 	%SpawnCheck.force_raycast_update()
+-	%SpawnCheck.global_position = offset + Ref.player.global_position
++	%SpawnCheck.global_position = offset + Ref.nx_target_position(global_position)
+ 	%SpawnCheck.target_position = Vector3(0, -96, 0)
+ 	if not %SpawnCheck.is_colliding():
+ 		return
+@@ -214,7 +214,7 @@
+ 	%LaserTimer.start(randf_range(laser_time_min, laser_time_max) * get_attack_time_scale())
+ 	if state == CALM_STORM or dead or disabled or shooting_laser:
+ 		return
+-	var general_direction: Vector3 = ( %Laser.global_position.direction_to(Ref.player.head.global_position) + 0.1 * Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1))).normalized()
++	var general_direction: Vector3 = ( %Laser.global_position.direction_to(Ref.nx_target_head(global_position)) + 0.1 * Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1))).normalized()
+ 	%HitCast.target_position = Vector3(0, 0, - laser_warning_max_distance)
+ 	SpatialMath.look_at_local( %HitCast, general_direction)
+ 	%HitCast.force_raycast_update()
+@@ -258,13 +258,13 @@
+ 
+ 	if state == CALM_STORM or state == SCARY_STORM:
+ 		target_look_direction = Vector3(0, 0, -1)
+-		target_velocity = target_look_direction * calm_speed * speed_multiplier * (0.1 if global_position.distance_to(Ref.player.global_position) > 64.0 else 1.0)
++		target_velocity = target_look_direction * calm_speed * speed_multiplier * (0.1 if global_position.distance_to(Ref.nx_target_position(global_position)) > 64.0 else 1.0)
+ 		if global_position.y < 4:
+ 			target_velocity.y = 1
+ 		target_arm_look_direction = target_look_direction
+ 		target_arm_velocity = %ArmTarget.global_position.direction_to( %ArmIdle.global_position) * calm_arm_speed
+ 	if state == FIGHT or state == SCARY_FIGHT or state == FINAL_FIGHT:
+-		var player_head: Vector3 = Ref.player.head.global_position
++		var player_head: Vector3 = Ref.nx_target_head(global_position)
+ 		var to_player: Vector3 = player_head - head.global_position
+ 		var horizontal_offset: Vector3 = Vector3(to_player.x, 0, to_player.z)
+ 		var horizontal_distance: float = horizontal_offset.length()

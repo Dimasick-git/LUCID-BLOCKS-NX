@@ -1,0 +1,58 @@
+--- a/main/entity/behaviors/break_blocks/break_blocks.gd
++++ b/main/entity/behaviors/break_blocks/break_blocks.gd
+@@ -77,23 +77,38 @@
+ 		new_item.initialize(item_state)
+ 
+ 
+-func break_block_instant(block_position: Vector3i) -> void :
++func break_block_instant(block_position: Vector3i) -> void:
+ 	if entity.disabled or not enabled:
+ 		return
++	if not Ref.world.is_position_loaded(block_position):
++		return
+ 
+-	if (Ref.world.is_position_loaded(block_position) and not Ref.world.get_block_type_at(block_position).id == 0) or Ref.world.get_block_type_at(block_position).internal_name == "cutscene block":
++	var world_block: Block = Ref.world.get_block_type_at(block_position)
++	if world_block == null:
++		return
++	if world_block.id == 0 and world_block.internal_name != "cutscene block":
++		return
+ 
+-		active_position = block_position
+-		block = ItemMap.map(Ref.world.get_block_type_at(block_position).id)
++	active_position = block_position
++	block = ItemMap.map(world_block.id)
+ 
+-		var held_item: ItemState = entity.held_item_inventory.items[entity.held_item_index]
+-		if decrease_held_item_durability and not (entity == Ref.player and held_item != null and ItemMap.map(held_item.id).internal_name == "super drill"):
+-			if block.pickaxe_affinity and pickaxe or block.axe_affinity and axe or block.shovel_affinity and shovel or block.meat_affinity and meat or block.plant_affinity and plant:
+-				entity.decrease_held_item_durability(1)
+-		if entity == Ref.player:
+-			Steamworks.increment_statistic("blocks_broken")
+-		Ref.world.break_block_at(block_position, true, Ref.main.creative and entity == Ref.player)
+-		drop_item()
++	if entity == Ref.player and Ref.coop_manager != null and Ref.coop_manager.sync_local_block_break(self, block_position):
++		return
++
++	var held_item: ItemState = entity.held_item_inventory.items[entity.held_item_index]
++	if decrease_held_item_durability and not (entity == Ref.player and held_item != null and ItemMap.map(held_item.id).internal_name == "super drill"):
++		if block.pickaxe_affinity and pickaxe or block.axe_affinity and axe or block.shovel_affinity and shovel or block.meat_affinity and meat or block.plant_affinity and plant:
++			entity.decrease_held_item_durability(1)
++
++	if entity == Ref.player:
++		Steamworks.increment_statistic("blocks_broken")
++
++	Ref.world.break_block_at(block_position, true, Ref.main.creative and entity == Ref.player)
++	drop_item()
++
++	if entity == Ref.player and Ref.coop_manager != null:
++		Ref.coop_manager.notify_local_world_state_dirty([block_position])
++		Ref.coop_manager.broadcast_host_block_break(block_position, block.id if block != null else 0)
+ 
+ 
+ func break_block_start(block_position: Vector3i) -> void :
+@@ -153,3 +168,4 @@
+ 		break_outline.update_progress(progress / progress_goal)
+ 		if progress >= progress_goal:
+ 			block_broken.emit()
++

@@ -1,0 +1,37 @@
+--- a/main/items/held_item/held_block/held_block.gd
++++ b/main/items/held_item/held_block/held_block.gd
+@@ -72,11 +72,17 @@
+ 
+ func place_block() -> void :
+ 	var to_place: Item = ItemMap.map(place_id)
++	var final_place_position: Vector3i = place_position + place_direction
+ 
+-	place_position += place_direction
+-	inventory.change_amount(inventory_index, -1)
+-	if not GuardChecker.is_guarded_entity(place_position, holder):
+-		Ref.world.place_block_at(place_position, to_place, true, true)
++	if _should_sync_coop_place() and Ref.coop_manager.sync_local_block_place(final_place_position, place_id, inventory, inventory_index):
++		place_position = final_place_position
++	else:
++		place_position = final_place_position
++		inventory.change_amount(inventory_index, -1)
++		if not GuardChecker.is_guarded_entity(place_position, holder):
++			Ref.world.place_block_at(place_position, to_place, true, true)
++		if holder == Ref.player and Ref.coop_manager != null:
++			Ref.coop_manager.notify_local_world_state_dirty([place_position])
+ 
+ 	if holder == Ref.player:
+ 		Steamworks.increment_statistic("blocks_placed")
+@@ -140,3 +146,12 @@
+ 	if place_id not in ItemMap.id_to_resource:
+ 		return false
+ 	return can_place()
++
++func _should_sync_coop_place() -> bool:
++	if Ref.coop_manager == null:
++		return false
++	if holder == Ref.player:
++		return true
++	return multiplayer.is_server() and not Ref.coop_manager.is_remote_player_proxy(holder)
++
++

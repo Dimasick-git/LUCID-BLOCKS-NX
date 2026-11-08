@@ -1,0 +1,14 @@
+--- a/main/ui/widget.gd
++++ b/main/ui/widget.gd
+@@ -8,7 +8,8 @@
+ 	if not debug_block.texture:
+ 		printerr("Missing texture :", debug_block.texture)
+ 		return false
+-	if not debug_block.texture.get_image():
+-		printerr("Corrupt texture: ", debug_block.texture.get_image())
++	var image: Image = debug_block.texture.get_image()
++	if image == null or image.is_empty():
++		printerr("Corrupt texture: ", debug_block.texture)
+ 		return false
+-	return not debug_block.texture.get_image().get_pixel(0, 0).is_equal_approx(Color("5bcffa"))
++	return not image.get_pixel(0, 0).is_equal_approx(Color("5bcffa"))

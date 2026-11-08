@@ -1,0 +1,48 @@
+--- a/main/world/living_block/cache_cube/cache_cube.gd
++++ b/main/world/living_block/cache_cube/cache_cube.gd
+@@ -6,24 +6,23 @@
+ var open: bool = false
+ var broken: bool = false
+ 
+-func interact(interactor: Entity) -> void :
++func interact(interactor: Entity) -> void:
+ 	if not can_currently_interact(interactor):
+ 		return
+ 	super.interact(interactor)
+ 
+ 	open = true
+-
+ 	InventorySlot.cache_cube_inventory = %Inventory
+-
+ 	%OpenSound.play()
+ 
+-	Ref.game_menu.initialize_cache_cube_inventory( %Inventory)
++	Ref.game_menu.initialize_cache_cube_inventory(%Inventory)
+ 	Ref.game_menu.open_inventory(GameMenu.INVENTORY_CACHE_CUBE, styles[style])
+ 
+ 	await Ref.game_menu.inventory_closed
+ 
+ 	InventorySlot.cache_cube_inventory = null
+-
++	if Ref.coop_manager != null:
++		Ref.coop_manager.notify_local_storage_inventory_changed(Vector3i(global_position), %Inventory)
+ 
+ 	if has_node("%CloseSound"):
+ 		%CloseSound.play()
+@@ -65,3 +64,16 @@
+ 
+ 		if new_item.state != DroppedItem.SWIM:
+ 			new_item.velocity = (throw_speed * ((Vector3(0, 1, 0) + Vector3(randf() - 0.5, 0.0, randf() - 0.5) * break_spread).normalized()))
++
++func _on_inventory_refreshed(_index: int) -> void:
++	if Ref.coop_manager != null:
++		Ref.coop_manager.notify_local_storage_inventory_changed(Vector3i(global_position), %Inventory)
++
++
++
++func _ready() -> void:
++	var inventory: Inventory = %Inventory
++	if inventory != null and not inventory.refresh.is_connected(_on_inventory_refreshed):
++		inventory.refresh.connect(_on_inventory_refreshed)
++
++

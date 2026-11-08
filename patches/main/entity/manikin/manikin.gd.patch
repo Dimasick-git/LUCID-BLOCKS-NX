@@ -1,0 +1,17 @@
+--- a/main/entity/manikin/manikin.gd
++++ b/main/entity/manikin/manikin.gd
+@@ -356,7 +356,7 @@
+ 
+ 
+ func get_look_direction() -> Vector3:
+-	return %RotationPivot.get_global_transform().basis.z if player == null else hand.global_position.direction_to(Ref.player.head.global_position + Vector3(0, 0.1, 0))
++	return %RotationPivot.get_global_transform().basis.z if player == null else hand.global_position.direction_to(Ref.nx_target_head(global_position) + Vector3(0, 0.1, 0))
+ 
+ 
+ func is_spacer() -> bool:
+@@ -364,4 +364,4 @@
+ 
+ 
+ func is_facing_player() -> bool:
+-	return %RotationPivot.get_global_transform().basis.z.dot(global_position.direction_to(Ref.player.global_position)) > 0.2
++	return %RotationPivot.get_global_transform().basis.z.dot(global_position.direction_to(Ref.nx_target_position(global_position))) > 0.2

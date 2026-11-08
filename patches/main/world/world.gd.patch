@@ -20,3 +20,45 @@
  
  	if load_enabled:
  		force_reload()
+@@ -96,6 +100,11 @@
+ 		even = not even
+ 		if not process_blocker:
+ 			process_blocker = true
++			var nx_centers: Array = []
++			if uses_coop_multi_region_loading():
++				nx_centers = Ref.coop_manager.get_same_instance_session_positions()
++			if has_method("set_loaded_region_centers"):
++				call("set_loaded_region_centers", nx_centers)
+ 			set_loaded_region_center(Ref.player.global_position)
+ 
+ 
+@@ -107,6 +116,15 @@
+ func _process(_delta: float) -> void :
+ 	process_blocker = false
+ 	simulate_frame = true
++	if load_enabled:
++		if has_method("process_coop_updates"):
++			call("process_coop_updates")
++		if nx_dynamic_refresh > 0 and not simulate_enabled:
++			if has_method("refresh_dynamic_visuals"):
++				call("refresh_dynamic_visuals")
++			nx_dynamic_refresh -= 1
++		if Ref.coop_manager != null and Ref.coop_manager.get_meta("nx_pending_patch", false) and is_all_loaded():
++			Ref.coop_manager.nx_flush_world_patch()
+ 
+ 
+ func _input(event: InputEvent) -> void :
+@@ -377,3 +395,13 @@
+ 
+ func save_file_register(file_register: SaveFileRegister) -> void :
+ 	file_register.set_data("dimension", current_dimension, true)
++
++var nx_dynamic_refresh := 0
++func queue_coop_dynamic_visual_refresh(frame_count: int = 4) -> void:
++    nx_dynamic_refresh = maxi(nx_dynamic_refresh, frame_count)
++func supports_coop_multi_region_loading() -> bool:
++    return has_method("set_loaded_region_centers")
++func uses_coop_multi_region_loading() -> bool:
++    return supports_coop_multi_region_loading() and multiplayer.is_server() and Ref.coop_manager != null and Ref.coop_manager.has_connected_remote_peers()
++func refresh_multiplayer_runtime_mode() -> void:
++    pass

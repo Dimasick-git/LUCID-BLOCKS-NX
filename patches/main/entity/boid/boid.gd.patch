@@ -1,0 +1,11 @@
+--- a/main/entity/boid/boid.gd
++++ b/main/entity/boid/boid.gd
+@@ -91,7 +91,7 @@
+ 
+ 	if not is_instance_valid(Ref.player):
+ 		return
+-	var distance_vector: Vector3 = Ref.player.global_position - global_position
++	var distance_vector: Vector3 = Ref.nx_target_position(global_position) - global_position
+ 	acceleration += 0.1 * distance_vector * delta
+ 
+ 

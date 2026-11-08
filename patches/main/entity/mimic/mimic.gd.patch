@@ -1,0 +1,33 @@
+--- a/main/entity/mimic/mimic.gd
++++ b/main/entity/mimic/mimic.gd
+@@ -63,8 +63,8 @@
+ 		return
+ 	if not state == CHASE:
+ 		return
+-	var target_direction: Vector3 = head.to_local(Ref.player.head.global_position).normalized()
+-	if (Ref.player.head.global_position.distance_to(head.global_position) < 6.0):
++	var target_direction: Vector3 = head.to_local(Ref.nx_target_head(global_position)).normalized()
++	if (Ref.nx_target_head(global_position).distance_to(head.global_position) < 6.0):
+ 		thrust(target_direction)
+ 
+ func thrust(target_direction: Vector3) -> void :
+@@ -93,8 +93,8 @@
+ 	if randf() < 0.22:
+ 		%SighPlayer.play()
+ 	angular_velocity += Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)).normalized() * 8.0
+-	if is_instance_valid(Ref.player) and (Ref.player.global_position.distance_to(global_position + target_direction) < attack_distance) and not WallChecker.is_obscured(head.global_position, Ref.player):
+-		%Attack.attack(Ref.player, Ref.player.global_position, 25.0)
++	if is_instance_valid(Ref.player) and (Ref.nx_target_position(global_position).distance_to(global_position + target_direction) < attack_distance) and not WallChecker.is_obscured(head.global_position, Ref.nx_target_entity(global_position)):
++		%Attack.attack(Ref.nx_target_entity(global_position), Ref.nx_target_position(global_position), 25.0)
+ 
+ 	if not is_instance_valid(tween):
+ 		return
+@@ -196,7 +196,7 @@
+ 		movement_velocity = lerp(movement_velocity, desired_velocity, min(1.0, delta * ground_accel))
+ 		movement_velocity.y = vertical_movement_velocity
+ 
+-		var dir: Vector3 = (Ref.player.global_position - global_position).normalized()
++		var dir: Vector3 = (Ref.nx_target_position(global_position) - global_position).normalized()
+ 		dir.y = 0
+ 		desired_velocity.x = dir.x * speed * (fast_multiplier if fast else 1.0) * (0.17 if charging_thrust else 1.0) * (0.2 if is_on_wall() else 1.0)
+ 		desired_velocity.z = dir.z * speed * (fast_multiplier if fast else 1.0) * (0.17 if charging_thrust else 1.0) * (0.2 if is_on_wall() else 1.0)

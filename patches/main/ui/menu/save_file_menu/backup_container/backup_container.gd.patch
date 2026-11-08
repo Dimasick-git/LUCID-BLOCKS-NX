@@ -1,0 +1,17 @@
+--- a/main/ui/menu/save_file_menu/backup_container/backup_container.gd
++++ b/main/ui/menu/save_file_menu/backup_container/backup_container.gd
+@@ -6,11 +6,11 @@
+ 
+ func initialize(index: int, backup: Dictionary, oldest: bool) -> void :
+ 	backup_index = index
+-	%BackupTitleLabel.text = "Backup %d" % (index + 1)
++	%BackupTitleLabel.text = tr("Backup %d") % (index + 1)
+ 	if index == 0:
+-		%BackupTitleLabel.text += " (newest)"
++		%BackupTitleLabel.text += tr(" (newest)")
+ 	elif oldest:
+-		%BackupTitleLabel.text += " (oldest)"
++		%BackupTitleLabel.text += tr(" (oldest)")
+ 	%BackupDateLabel.text = WordBank.format_date(backup["date"])
+ 	%ProphecyBall.set_instance_shader_parameter("mandelbulb_power", randf_range(4.0, 9.0))
+ 	%ProphecyBall.set_instance_shader_parameter("animation_speed", randf_range(0.3, 1.2))

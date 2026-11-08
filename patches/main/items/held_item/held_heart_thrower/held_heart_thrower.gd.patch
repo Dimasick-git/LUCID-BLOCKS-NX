@@ -1,0 +1,30 @@
+--- a/main/items/held_item/held_heart_thrower/held_heart_thrower.gd
++++ b/main/items/held_item/held_heart_thrower/held_heart_thrower.gd
+@@ -19,6 +19,7 @@
+ 	get_tree().get_root().add_child(new_heart)
+ 
+ 	new_heart.linear_velocity = holder.velocity + holder.get_look_direction() * throw_impulse
++	_sync_visual_heart_throw(new_heart)
+ 
+ 	holder.decrease_held_item_durability(1)
+ 
+@@ -37,3 +38,19 @@
+ 
+ func can_interact(_data: Dictionary) -> bool:
+ 	return Ref.world.is_position_loaded(holder.hand.global_position) and not Ref.world.is_block_solid_at(holder.hand.global_position)
++
++func _sync_visual_heart_throw(new_heart: Heart) -> void:
++	if Ref.coop_manager == null:
++		return
++	if not Ref.coop_manager.has_active_session():
++		return
++	if multiplayer.is_server():
++		if Ref.coop_manager.is_remote_player_proxy(holder):
++			return
++		if Ref.coop_manager.has_method("broadcast_host_visual_heart_throw"):
++			Ref.coop_manager.call("broadcast_host_visual_heart_throw", new_heart.global_position, new_heart.linear_velocity)
++		return
++	if holder == Ref.player and Ref.coop_manager.has_method("send_guest_visual_heart_throw"):
++		Ref.coop_manager.call("send_guest_visual_heart_throw", new_heart.global_position, new_heart.linear_velocity)
++
++

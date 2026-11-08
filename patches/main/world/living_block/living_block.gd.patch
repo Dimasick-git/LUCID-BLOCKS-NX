@@ -1,0 +1,26 @@
+--- a/main/world/living_block/living_block.gd
++++ b/main/world/living_block/living_block.gd
+@@ -12,14 +12,14 @@
+ 
+ 
+ func is_out_of_range() -> bool:
+-	return global_position.distance_to(Ref.player.global_position) > process_distance
++	return global_position.distance_to(Ref.nx_target_position(global_position)) > process_distance
+ 
+ 
+ 
+ 
+ 
+ func can_currently_interact(interactor: Entity) -> bool:
+-	return can_interact and Ref.world.is_position_loaded(global_position) and not disabled and ( not player_interact_only or interactor == Ref.player)
++	return can_interact and Ref.world.is_position_loaded(global_position) and not disabled and (not player_interact_only or interactor == Ref.player or (Ref.coop_manager != null and Ref.coop_manager.is_remote_player_proxy(interactor)))
+ 
+ 
+ 
+@@ -80,4 +80,5 @@
+ 
+ func _on_tree_exiting() -> void :
+ 	before_unloading()
+-	Ref.world.unregister_living_block(global_position)
++	if Ref.world.get_living_block_at(global_position) == self:
++		Ref.world.unregister_living_block(global_position)

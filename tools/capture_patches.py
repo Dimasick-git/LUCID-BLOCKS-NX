@@ -24,4 +24,10 @@ for path in (BUILD/'game/main').rglob('*'):
     out = ROOT/'patches'/Path(rel+'.patch')
     out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(''.join(difflib.unified_diff(previous.splitlines(True),current.splitlines(True),fromfile='a/'+rel,tofile='b/'+rel)),encoding='utf-8')
-print('Captured engine and game adaptations')
+native = BUILD/'upstream-gdblocks'
+native_diff = subprocess.check_output(['git','-C',str(native),'diff','--',
+    'extension/include/chunk.h','extension/include/world.h',
+    'extension/src/chunk.cpp','extension/src/world.cpp'])
+assert native_diff, 'Expected Switch native adaptations'
+(ROOT/'patches/gdblocks-switch-memory.patch').write_bytes(native_diff)
+print('Captured engine, native and game adaptations')

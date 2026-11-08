@@ -1,0 +1,45 @@
+--- a/main/entity/hamsa/hamsa.gd
++++ b/main/entity/hamsa/hamsa.gd
+@@ -85,13 +85,13 @@
+ 			state = IDLE
+ 			%IdleTimer.start(randf_range(idle_time_min, idle_time_max))
+ 			return
+-		var center: Vector3 = Ref.player.head.global_position
++		var center: Vector3 = Ref.nx_target_head(global_position)
+ 
+ 		if Ref.world.is_position_loaded(global_position + global_position.direction_to(center) * delta * speed):
+ 			global_position += global_position.direction_to(center) * delta * speed
+ 
+ 
+-		SpatialMath.look_at( %RotationPivot, Ref.player.head.global_position)
++		SpatialMath.look_at( %RotationPivot, Ref.nx_target_head(global_position))
+ 
+ 		if global_position.distance_to(center) < 1.0:
+ 			travel()
+@@ -108,7 +108,7 @@
+ func teleport(final: bool) -> bool:
+ 	var spawn_position: Vector3 = Vector3(randf_range(-1, 1), randf_range(-0.2, 1), randf_range(-1, 1))
+ 	spawn_position = spawn_position.normalized() * randf_range(0.1, 1) * teleport_radius
+-	spawn_position += Ref.player.global_position
++	spawn_position += Ref.nx_target_position(global_position)
+ 
+ 	if Ref.world.is_position_loaded(spawn_position) and Ref.world.is_block_solid_at(spawn_position):
+ 		return false
+@@ -118,7 +118,7 @@
+ 	if %SpawnRay.is_colliding():
+ 		spawn_position = %SpawnRay.get_collision_point()
+ 
+-	if spawn_position.distance_to(Ref.player.global_position) <= near_radius:
++	if spawn_position.distance_to(Ref.nx_target_position(global_position)) <= near_radius:
+ 		return false
+ 
+ 	var new_player: AudioStreamPlayer3D = %TeleportPlayer.duplicate()
+@@ -134,7 +134,7 @@
+ 	global_position = spawn_position
+ 
+ 	if final:
+-		SpatialMath.look_at( %RotationPivot, Ref.player.head.global_position)
++		SpatialMath.look_at( %RotationPivot, Ref.nx_target_head(global_position))
+ 
+ 	new_player = %TeleportPlayer.duplicate()
+ 	new_player.finished.connect(new_player.queue_free)

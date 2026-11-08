@@ -1,0 +1,119 @@
+--- a/main/items/held_item/held_explosive/physical_explosive/explosion/explosion.gd
++++ b/main/items/held_item/held_explosive/physical_explosive/explosion/explosion.gd
+@@ -26,15 +26,21 @@
+ 		light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
+ 
+ 
+-func explode_blocks() -> void :
++func explode_blocks() -> void:
+ 	if not Ref.world.is_position_loaded(global_position):
+ 		return
+ 	if GuardChecker.is_guarded_entity(global_position, entity_owner):
+ 		return
++
++	if Ref.coop_manager != null and Ref.coop_manager.has_active_session() and not Ref.coop_manager._is_local_world_authority():
++		return
++
++	var before_snapshot: Dictionary = _capture_world_change_snapshot()
+ 	if watery:
+ 		Ref.world.flood_at(global_position, explode_radius)
+ 	else:
+ 		Ref.world.explode_at(global_position, explode_radius, firey)
++	_broadcast_world_change_snapshot(before_snapshot)
+ 
+ 
+ func explode_entities() -> void :
+@@ -74,8 +80,10 @@
+ 
+ 
+ 
+-func explode_entity(target: Entity) -> void :
++func explode_entity(target: Entity) -> void:
+ 	if not is_instance_valid(target) or target.disabled or target.dead or not target.is_inside_tree():
++		return
++	if _should_ignore_target_for_coop_locked_peer(target):
+ 		return
+ 	if target.direct_damage_cooldown:
+ 		return
+@@ -85,7 +93,7 @@
+ 		return
+ 
+ 	var explode_vector: Vector3 = target.global_position - global_position
+-	var explosion_strength: float = sqrt(max(0, 1.0 - explode_vector.length() / explode_radius))
++	var explosion_strength: float = sqrt(max(0.0, 1.0 - explode_vector.length() / float(explode_radius)))
+ 
+ 	var hate: int = 0
+ 	if is_instance_valid(entity_owner):
+@@ -97,7 +105,72 @@
+ 	var actual_damage: int = max(1, round(max_damage * explosion_strength + scaled_hate * hate_scale))
+ 	var knockback_direction: Vector3 = explode_vector.normalized()
+ 	var knockback_vector: Vector3 = (knockback_boost + knockback_direction) * explosion_strength * knockback_strength
++
++	if Ref.coop_manager != null and multiplayer.is_server() and Ref.coop_manager.sync_host_direct_hit_on_remote_player(entity_owner, target, target.head.global_position if is_instance_valid(target.head) else target.global_position, actual_damage, knockback_vector, firey):
++		return
++
+ 	target.knockback_velocity += knockback_vector
+ 
+ 	if actual_damage > 0:
+ 		Attack.basic_attack_override_direction(entity_owner, target, actual_damage, target.head.global_position, - knockback_direction, firey)
++
++func _broadcast_world_change_snapshot(before_snapshot: Dictionary) -> void:
++	if Ref.coop_manager == null or not Ref.coop_manager.has_active_session() or not Ref.coop_manager.multiplayer.is_server():
++		return
++
++	var block_changes: Array = []
++	var fire_changes: Array = []
++	for block_position in before_snapshot.keys():
++		var previous_state: Dictionary = before_snapshot[block_position]
++		var current_block_id: int = int(Ref.world.get_block_type_at(block_position).id)
++		var current_fire_level: int = int(Ref.world.get_fire_at(block_position))
++		if current_block_id != int(previous_state.get("block_id", 0)):
++			block_changes.append([block_position, current_block_id])
++		if current_fire_level != int(previous_state.get("fire_level", 0)):
++			fire_changes.append([block_position, current_fire_level])
++
++	Ref.coop_manager.broadcast_host_world_changes(block_changes, fire_changes)
++
++
++
++func _get_coop_intended_remote_peer_id() -> int:
++	if has_meta("coop_intended_peer_id"):
++		return int(get_meta("coop_intended_peer_id", -1))
++	if is_instance_valid(entity_owner) and entity_owner.has_method("get_coop_locked_target_peer_id"):
++		return int(entity_owner.call("get_coop_locked_target_peer_id"))
++	return -1
++
++
++
++func _should_ignore_target_for_coop_locked_peer(target: Entity) -> bool:
++	if target == null or not is_instance_valid(target) or Ref.coop_manager == null:
++		return false
++	var intended_peer_id: int = _get_coop_intended_remote_peer_id()
++	if intended_peer_id <= 1:
++		return false
++	if target == Ref.player:
++		return true
++	if Ref.coop_manager.is_remote_player_proxy(target):
++		return Ref.coop_manager.get_remote_player_proxy_peer_id(target) != intended_peer_id
++	return false
++
++
++
++func _capture_world_change_snapshot() -> Dictionary:
++	var snapshot: Dictionary = {}
++	var scan_radius: int = int(ceil(float(explode_radius))) + 1
++	var center: Vector3i = Vector3i(global_position.floor())
++
++	for y in range(-scan_radius, scan_radius + 1):
++		for z in range(-scan_radius, scan_radius + 1):
++			for x in range(-scan_radius, scan_radius + 1):
++				var block_position: Vector3i = center + Vector3i(x, y, z)
++				if not Ref.world.is_position_loaded(block_position):
++					continue
++				snapshot[block_position] = {
++					"block_id": int(Ref.world.get_block_type_at(block_position).id),
++					"fire_level": int(Ref.world.get_fire_at(block_position)),
++				}
++	return snapshot
++
++

@@ -1,0 +1,3 @@
+# Unified diff payloads contain context markers before original indentation.
+*.patch -whitespace
+localization/ru-ui.txt -whitespace

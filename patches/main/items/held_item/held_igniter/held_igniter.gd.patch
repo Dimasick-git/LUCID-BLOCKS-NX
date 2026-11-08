@@ -1,0 +1,67 @@
+--- a/main/items/held_item/held_igniter/held_igniter.gd
++++ b/main/items/held_item/held_igniter/held_igniter.gd
+@@ -8,6 +8,17 @@
+ 		if not data.target.has_node("%Burn"):
+ 			return false
+ 
++		if Ref.coop_manager != null and holder == Ref.player and Ref.coop_manager.is_client_session():
++			if not Ref.coop_manager.sync_local_ignite_entity(data.target):
++				return false
++
++			var local_player: AudioStreamPlayer3D = %StrikePlayer.duplicate()
++			get_tree().get_root().add_child(local_player)
++			local_player.global_position = data.target.get_node("%Burn").global_position
++			local_player.play()
++			inventory.change_amount(inventory_index, -1)
++			return true
++
+ 		data.target.get_node("%Burn").ignite()
+ 
+ 		var new_player: AudioStreamPlayer3D = %StrikePlayer.duplicate()
+@@ -17,24 +28,28 @@
+ 		inventory.change_amount(inventory_index, -1)
+ 
+ 		return true
+-	elif "target_position" in data:
++
++	if "target_position" in data:
+ 		if not Ref.world.is_position_loaded(data.target_position):
+ 			return false
+ 
+ 		Ref.world.place_fire_at(data.target_position, 1)
++		if Ref.world.get_fire_at(data.target_position) <= 0:
++			return false
+ 
+-		if Ref.world.get_fire_at(data.target_position) > 0:
+-			var new_player: AudioStreamPlayer3D = %StrikePlayer.duplicate()
+-			new_player.finished.connect(new_player.queue_free)
+-			get_tree().get_root().add_child(new_player)
+-			new_player.global_position = data.target_position
+-			new_player.play()
+-			inventory.change_amount(inventory_index, -1)
+-			return true
+-		else:
+-			return false
+-	else:
+-		return false
++		var strike_player: AudioStreamPlayer3D = %StrikePlayer.duplicate()
++		strike_player.finished.connect(strike_player.queue_free)
++		get_tree().get_root().add_child(strike_player)
++		strike_player.global_position = data.target_position
++		strike_player.play()
++		inventory.change_amount(inventory_index, -1)
++
++		if Ref.coop_manager != null:
++			Ref.coop_manager.sync_local_fire_cell(Vector3i(data.target_position), 1)
++			Ref.coop_manager.notify_local_world_state_dirty([Vector3i(data.target_position)])
++		return true
++
++	return false
+ 
+ 
+ func can_interact(data: Dictionary) -> bool:
+@@ -47,3 +62,4 @@
+ 		return Ref.world.is_position_loaded(data.target_position) and Ref.world.fire_eligible(data.target_position)
+ 	else:
+ 		return false
++

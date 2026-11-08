@@ -34,3 +34,19 @@ def patch(data,overrides,remove_prefixes=()):
         encoded=name.encode('utf-8');out+=struct.pack('<I',len(encoded))+encoded+struct.pack('<I',len(settings[name]))+settings[name]
     unpack(out)
     return bytes(out)
+
+def prepend_autoloads(data,autoloads):
+    """Insert built-in port services before game loaders, preserving their order."""
+    settings=unpack(data);ordered={};inserted=False
+    for key,value in settings.items():
+        if key.startswith('autoload/') and not inserted:
+            ordered.update({'autoload/'+name:variant('*'+path) for name,path in autoloads.items()})
+            inserted=True
+        if key not in {'autoload/'+name for name in autoloads}:
+            ordered[key]=value
+    if not inserted:ordered.update({'autoload/'+name:variant('*'+path) for name,path in autoloads.items()})
+    out=bytearray(b'ECFG'+struct.pack('<I',len(ordered)))
+    for name,value in ordered.items():
+        encoded=name.encode();out+=struct.pack('<I',len(encoded))+encoded+struct.pack('<I',len(value))+value
+    unpack(out)
+    return bytes(out)

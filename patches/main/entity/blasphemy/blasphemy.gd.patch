@@ -1,0 +1,11 @@
+--- a/main/entity/blasphemy/blasphemy.gd
++++ b/main/entity/blasphemy/blasphemy.gd
+@@ -220,7 +220,7 @@
+ 
+ 	stuck_impulse = lerp(stuck_impulse, Vector3(), min(1.0, delta * ground_accel))
+ 
+-	var dir: Vector3 = (Ref.player.global_position - global_position).normalized()
++	var dir: Vector3 = (Ref.nx_target_position(global_position) - global_position).normalized()
+ 	dir.y = 0
+ 	desired_velocity.x = dir.x * speed
+ 	desired_velocity.z = dir.z * speed

@@ -1,0 +1,40 @@
+--- a/main/items/held_item/held_ball_thrower/held_ball_thrower.gd
++++ b/main/items/held_item/held_ball_thrower/held_ball_thrower.gd
+@@ -15,10 +15,17 @@
+ 
+ 	var new_ball: Ball = ball_scene.instantiate()
+ 	new_ball.entity_owner = holder
++	if is_instance_valid(holder) and holder.has_method("get_coop_locked_target_peer_id"):
++		var intended_peer_id: int = int(holder.call("get_coop_locked_target_peer_id"))
++		if intended_peer_id > 1:
++			new_ball.set_meta("coop_intended_peer_id", intended_peer_id)
+ 	new_ball.position = holder.hand.global_position
+ 	get_tree().get_root().add_child(new_ball)
+ 
+ 	new_ball.linear_velocity = holder.velocity + holder.get_look_direction() * throw_impulse
++	if is_instance_valid(holder) and holder.get_class() == "Manikin":
++		print("[lucid-blocks-coop][manikin-debug] fire-ball holder=", holder.name, " look_dir=", holder.get_look_direction(), " hand=", holder.hand.global_position)
++	_sync_visual_ball_throw(new_ball)
+ 
+ 	holder.decrease_held_item_durability(1)
+ 
+@@ -40,3 +47,19 @@
+ 
+ func can_interact(_data: Dictionary) -> bool:
+ 	return Ref.world.is_position_loaded(holder.hand.global_position) and not Ref.world.is_block_solid_at(holder.hand.global_position)
++
++func _sync_visual_ball_throw(new_ball: Ball) -> void:
++	if Ref.coop_manager == null:
++		return
++	if not Ref.coop_manager.has_active_session():
++		return
++	if multiplayer.is_server():
++		if Ref.coop_manager.is_remote_player_proxy(holder):
++			return
++		if Ref.coop_manager.has_method("broadcast_host_visual_ball_throw"):
++			Ref.coop_manager.call("broadcast_host_visual_ball_throw", new_ball.global_position, new_ball.linear_velocity)
++		return
++	if holder == Ref.player and Ref.coop_manager.has_method("send_guest_visual_ball_throw"):
++		Ref.coop_manager.call("send_guest_visual_ball_throw", new_ball.global_position, new_ball.linear_velocity)
++
++

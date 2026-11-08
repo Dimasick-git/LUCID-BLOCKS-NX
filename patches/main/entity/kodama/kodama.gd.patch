@@ -1,0 +1,11 @@
+--- a/main/entity/kodama/kodama.gd
++++ b/main/entity/kodama/kodama.gd
+@@ -43,7 +43,7 @@
+ 		if state == IDLE and anger >= anger_threshold:
+ 			state = HOSTILE
+ 			if not is_instance_valid(attack_target):
+-				attack_target = Ref.player
++				attack_target = Ref.nx_target_entity(global_position)
+ var desired_direction: Vector3
+ 
+ signal attack_frame

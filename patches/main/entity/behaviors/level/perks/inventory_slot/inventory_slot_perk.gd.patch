@@ -1,0 +1,11 @@
+--- a/main/entity/behaviors/level/perks/inventory_slot/inventory_slot_perk.gd
++++ b/main/entity/behaviors/level/perks/inventory_slot/inventory_slot_perk.gd
+@@ -9,7 +9,7 @@
+ 
+ 
+ func get_description() -> String:
+-	return base_description % amount
++	return tr(base_description) % amount
+ 
+ 
+ func is_available() -> bool:

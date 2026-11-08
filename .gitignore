@@ -16,7 +16,7 @@ __pycache__/
 *.nca
 forwarder/build/
 Usersdimaslucid-buildupstream-gdblocksgodot-cppbinlibgodot-cpp.switch.template_release.double.arm64.a
-game/
+/game/
 .godot/
 *.keys
 *.pem

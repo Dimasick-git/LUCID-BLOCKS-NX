@@ -1,0 +1,13 @@
+--- a/main/entity/behaviors/level/perks/stat_boost/stat_boost_perk.gd
++++ b/main/entity/behaviors/level/perks/stat_boost/stat_boost_perk.gd
+@@ -27,8 +27,8 @@
+ 
+ func get_description() -> String:
+ 	if stat == "Stack Size":
+-		return base_description % get_stack_size_increase()
+-	return base_description % amount
++		return tr(base_description) % get_stack_size_increase()
++	return tr(base_description) % amount
+ 
+ func is_available() -> bool:
+ 	if limit <= 0:

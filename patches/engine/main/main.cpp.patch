@@ -28,7 +28,18 @@
  
  		} else if (arg == "-d" || arg == "--debug") {
  			debug_uri = "local://";
-@@ -5134,9 +5135,15 @@
+@@ -2186,6 +2187,10 @@
+ 			WorkerThreadPool::get_singleton()->init(-1, 0.75);
+ 		} else {
+ 			int worker_threads = GLOBAL_GET("threading/worker_pool/max_threads");
++#ifdef HORIZON_ENABLED
++            worker_threads = MAX(1, OS::get_singleton()->get_processor_count() - 1);
++            printf("[lucid-nx] cores=%d generation_workers=%d\n", OS::get_singleton()->get_processor_count(), worker_threads);
++#endif
+ 			float low_priority_ratio = GLOBAL_GET("threading/worker_pool/low_priority_thread_ratio");
+ 			WorkerThreadPool::get_singleton()->init(worker_threads, low_priority_ratio);
+ 		}
+@@ -5134,9 +5139,15 @@
  	NavigationServer3D::get_singleton()->process(process_step * time_scale);
  #endif // NAVIGATION_3D_DISABLED
  
@@ -44,7 +55,7 @@
  	GodotProfileZoneGrouped(_profile_zone, "RenderingServer::draw");
  	const bool has_pending_resources_for_processing = RD::get_singleton() && RD::get_singleton()->has_pending_resources_for_processing();
  	bool wants_present = (DisplayServer::get_singleton()->can_any_window_draw() ||
-@@ -5157,6 +5164,22 @@
+@@ -5157,6 +5168,22 @@
  		}
  	}
  

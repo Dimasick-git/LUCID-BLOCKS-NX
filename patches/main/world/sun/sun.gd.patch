@@ -1,0 +1,24 @@
+--- a/main/world/sun/sun.gd
++++ b/main/world/sun/sun.gd
+@@ -70,7 +70,6 @@
+ 
+ func _process(delta: float) -> void :
+ 	var time_scale: float = 1.0 / (60 * day_length)
+-
+ 	if time_moving:
+ 		if time >= 1.0:
+ 			days_elapsed += 1
+@@ -83,7 +82,7 @@
+ 	session_cumulative_time += delta
+ 
+ 	depth_scale = get_height_x()
+-	light_energy = (brightness_curve.curve.sample(time) * height_brightness_curve.curve.sample(depth_scale))
++	light_energy = brightness_curve.curve.sample(time) * height_brightness_curve.curve.sample(depth_scale)
+ 	light_color = light_color_gradient.gradient.sample(time)
+ 	if Ref.main.wrathful_torus:
+ 		light_color *= wrath_modulate
+@@ -141,3 +140,4 @@
+ 		time_moving = false
+ 	else:
+ 		time_moving = true
++

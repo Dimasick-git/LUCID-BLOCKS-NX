@@ -1,0 +1,203 @@
+--- a/main/world/spawning/entity_spawner/entity_spawner.gd
++++ b/main/world/spawning/entity_spawner/entity_spawner.gd
+@@ -29,6 +29,9 @@
+ var last_spawn_position: Vector3
+ 
+ 
++const DISCOVERY_SPAWN_COOLDOWN_MSEC: int = 200
++var last_discovery_spawn_attempt_msec: int = 0
++
+ func _ready() -> void :
+ 	%SpawnTimer.timeout.connect(_on_timeout.bind(false))
+ 	%RareSpawnTimer.timeout.connect(_on_timeout.bind(true))
+@@ -73,6 +76,8 @@
+ 
+ func _on_child_entered_tree(node: Node) -> void :
+ 	if node is Entity and not node is Player:
++		if _can_use_multi_region_logic() and not bool(node.get_meta("coop_runtime_spawned", false)):
++			return
+ 		entities.append(node as Entity)
+ 
+ 
+@@ -88,11 +93,20 @@
+ 	if not (Ref.world.current_dimension == LucidBlocksWorld.Dimension.NARAKA or (Ref.world.current_dimension == LucidBlocksWorld.Dimension.FIRMAMENT and not rare)):
+ 		return false
+ 	flush_deleted_entities()
+-	if randf() < clamp(len(entities) * soft_limit_growth, 0.0, 0.9):
+-		return false
+-	if len(entities) >= max_spawns:
+-		return false
+-	if not Ref.world.is_position_loaded(spawn_position) or Ref.world.get_block_type_at(spawn_position).id != 0:
++
++	var player_count: int = _get_spawn_group_count()
++	var spawn_budget_count: int = _get_spawn_budget_count(spawn_position)
++	if randf() < clamp((float(spawn_budget_count) / float(player_count)) * soft_limit_growth, 0.0, 0.9):
++		return false
++	if len(entities) >= _get_spawn_cap():
++		return false
++
++	if _can_use_multi_region_logic() and _get_same_instance_player_count() > 1:
++		var local_spawn_cap: int = max_spawns
++		if spawn_budget_count >= local_spawn_cap:
++			return false
++
++	if not _is_spawn_position_loaded(spawn_position) or Ref.world.get_block_type_at(spawn_position).id != 0:
+ 		return false
+ 
+ 	var structure: Structure = Ref.world.get_nearest_structure(spawn_position)
+@@ -130,12 +144,12 @@
+ 		spawn_position = floor_raycast.get_collision_point()
+ 		var below_position: Vector3 = spawn_position - Vector3(0, 0.1, 0)
+ 		var above_position: Vector3 = spawn_position + Vector3(0, 0.1, 0)
+-		if not Ref.world.is_position_loaded(spawn_position) or not Ref.world.is_position_loaded(below_position) or not is_block_valid(Ref.world.get_block_type_at(below_position)) or not Ref.world.is_position_loaded(above_position) or Ref.world.is_under_water(above_position):
++		if not _is_spawn_position_loaded(spawn_position) or not _is_spawn_position_loaded(below_position) or not is_block_valid(Ref.world.get_block_type_at(below_position)) or not _is_spawn_position_loaded(above_position) or Ref.world.is_under_water(above_position):
+ 			entity.queue_free()
+ 			return false
+ 
+ 
+-	if spawn_position.distance_to(Ref.player.global_position) < near_distance:
++	if _is_too_close_to_active_player(spawn_position):
+ 		entity.queue_free()
+ 		return false
+ 
+@@ -159,10 +173,14 @@
+ 
+ 	entity.transform.origin = spawn_position
+ 	entity.allow_swarm()
++	entity.set_meta("coop_runtime_spawned", true)
++	if not multiplayer.is_server():
++		entity.set_meta("coop_guest_local_authority", true)
+ 	get_tree().get_root().add_child(entity)
++	if Ref.coop_manager != null and Ref.coop_manager.has_method("ensure_runtime_entity_uuid"):
++		Ref.coop_manager.call("ensure_runtime_entity_uuid", entity)
+ 
+ 	entities.append(entity)
+-
+ 
+ 	last_spawn_position = spawn_position
+ 
+@@ -236,3 +254,124 @@
+ 
+ func load_file(file: SaveFile) -> void :
+ 	risk_factor = file.get_data("entity_spawner/risk_factor", 0)
++
++func _can_use_multi_region_logic() -> bool:
++	return multiplayer.is_server() \
++		and Ref.coop_manager != null \
++		and Ref.coop_manager.has_connected_remote_peers() \
++		and Ref.world != null \
++		and Ref.world.has_method("uses_coop_multi_region_loading") \
++		and bool(Ref.world.call("uses_coop_multi_region_loading"))
++
++
++
++func _get_same_instance_player_count() -> int:
++	if not _can_use_multi_region_logic():
++		return 1
++	return maxi(1, int(Ref.coop_manager.get_same_instance_session_player_count()))
++
++
++
++func _get_spawn_group_anchors() -> Array:
++	if not _can_use_multi_region_logic() or _get_same_instance_player_count() <= 1:
++		return [Ref.player.global_position]
++
++	var raw_positions: Array = Ref.coop_manager.get_same_instance_session_positions()
++	var grouped_positions: Array = []
++	var merge_distance: float = maxf(spawn_radius, near_distance) * 1.5
++	var merge_distance_squared: float = merge_distance * merge_distance
++
++	for raw_position in raw_positions:
++		if not (raw_position is Vector3):
++			continue
++		var position: Vector3 = raw_position
++		var merged: bool = false
++		for i in range(grouped_positions.size()):
++			var existing: Vector3 = grouped_positions[i]
++			if existing.distance_squared_to(position) <= merge_distance_squared:
++				grouped_positions[i] = existing.lerp(position, 0.5)
++				merged = true
++				break
++		if not merged:
++			grouped_positions.append(position)
++
++	if grouped_positions.is_empty():
++		grouped_positions.append(Ref.player.global_position)
++	return grouped_positions
++
++
++
++func _get_spawn_interest_radius() -> float:
++	if not _can_use_multi_region_logic():
++		return spawn_radius + 24.0
++	return maxf(spawn_radius + 24.0, Ref.coop_manager.get_same_instance_activity_radius(spawn_radius) + 16.0)
++
++
++
++func _is_spawn_position_loaded(pos: Vector3) -> bool:
++	if Ref.world.is_position_loaded(pos):
++		return true
++	if _can_use_multi_region_logic() and _get_same_instance_player_count() > 1:
++		return Ref.coop_manager.is_position_near_same_instance_player(pos, spawn_radius + 16.0)
++	return false
++
++
++
++func _is_spawn_region_relevant_to_players(spawn_position: Vector3) -> bool:
++	if not _can_use_multi_region_logic():
++		return true
++	return Ref.coop_manager.is_position_near_same_instance_player(spawn_position, _get_spawn_interest_radius())
++
++
++
++func _is_too_close_to_active_player(spawn_position: Vector3) -> bool:
++	if not _can_use_multi_region_logic():
++		return spawn_position.distance_to(Ref.player.global_position) < near_distance
++	return Ref.coop_manager.is_position_near_same_instance_player(spawn_position, near_distance)
++
++
++
++func _get_spawn_anchor() -> Vector3:
++	if not _can_use_multi_region_logic():
++		return Ref.player.global_position
++	return Ref.coop_manager.get_next_same_instance_spawn_anchor(Ref.player.global_position)
++
++
++
++func _get_spawn_group_count() -> int:
++	return maxi(1, _get_spawn_group_anchors().size())
++
++
++
++func _get_spawn_cap() -> int:
++	var group_count: int = _get_spawn_group_count()
++	return max_spawns * group_count
++
++
++
++func _get_nearby_spawn_count(spawn_position: Vector3, radius: float) -> int:
++	var radius_squared: float = radius * radius
++	var nearby_count: int = 0
++	for entity in entities:
++		if not is_instance_valid(entity) or entity.dead:
++			continue
++		if entity.global_position.distance_squared_to(spawn_position) <= radius_squared:
++			nearby_count += 1
++	return nearby_count
++
++
++
++func _get_spawn_budget_count(spawn_position: Vector3) -> int:
++	if not _can_use_multi_region_logic() or _get_spawn_group_count() <= 1:
++		return len(entities)
++	return _get_nearby_spawn_count(spawn_position, _get_spawn_interest_radius())
++
++
++
++func _get_spawn_position_near(anchor: Vector3) -> Vector3:
++	var spawn_position: Vector3 = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1))
++	spawn_position = spawn_position.normalized() * randf_range(0.1, 1) * spawn_radius
++	spawn_position += anchor
++	return spawn_position
++
++

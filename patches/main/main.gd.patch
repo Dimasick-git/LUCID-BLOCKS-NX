@@ -1,0 +1,40 @@
+--- a/main/main.gd
++++ b/main/main.gd
+@@ -625,6 +625,7 @@
+ 
+ 
+ func _on_settings_menu_exited() -> void :
++	NxLocale.set_language(str(Ref.save_file_manager.settings_file.get_data("language", "en")))
+ 	%SettingsMenu.deactivate()
+ 
+ 	await Ref.trans.open()
+@@ -680,6 +681,10 @@
+ 
+ 
+ func enter_game(place_floor_block: bool = false, find_spawn_position: bool = false, white_close: bool = false) -> void :
++	NxPerformance.begin_loading()
++	if OS.has_feature("switch"):
++		Ref.world.chunk_render_limit = 2
++		Ref.world.usec_budget_per_frame = 5000
+ 	Ref.world.make_environment_changes_instant()
+ 	Ref.environment.disable_sdfgi()
+ 
+@@ -737,6 +742,10 @@
+ 		if Ref.world.is_position_loaded(safety_position) and not Ref.world.is_block_solid_at(safety_position):
+ 			Ref.world.place_block_at(safety_position, upside_down_block, false, true)
+ 		Ref.player.global_position += Vector3(0, 2, 0)
++	NxPerformance.end_loading()
++	if OS.has_feature("switch"):
++		Ref.world.chunk_render_limit = 1
++		Ref.world.usec_budget_per_frame = 2000
+ 	print_rich("[color=#94b09d]World chunks loaded")
+ 
+ 	Ref.entity_spawner.start_spawning()
+@@ -785,6 +794,7 @@
+ 
+ 
+ func quit_game(save_game: bool, write_file: bool) -> void :
++	NxPerformance.end_loading()
+ 	if write_file:
+ 		Ref.save_notifier.notify()
+ 

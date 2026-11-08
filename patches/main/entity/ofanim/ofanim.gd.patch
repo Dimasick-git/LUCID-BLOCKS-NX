@@ -1,0 +1,17 @@
+--- a/main/entity/ofanim/ofanim.gd
++++ b/main/entity/ofanim/ofanim.gd
+@@ -47,12 +47,12 @@
+ 	distance_process_check()
+ 
+ 	if state == IDLE:
+-		var center: Vector3 = Ref.player.global_position
++		var center: Vector3 = Ref.nx_target_position(global_position)
+ 		var target_position: Vector3 = center + offset
+ 		var new_global_position = lerp(global_position, target_position, delta * move_speed)
+ 		if Ref.world.is_position_loaded(new_global_position):
+ 			global_position = new_global_position
+-		SpatialMath.look_at(self, Ref.player.head.global_position)
++		SpatialMath.look_at(self, Ref.nx_target_head(global_position))
+ 
+ 
+ func looked_at_by_player() -> void :

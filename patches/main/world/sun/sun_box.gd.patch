@@ -1,0 +1,7 @@
+--- a/main/world/sun/sun_box.gd
++++ b/main/world/sun/sun_box.gd
+@@ -23,3 +23,4 @@
+ 
+ 	var q: Quaternion = spin * tilt
+ 	rotation = q.get_euler()
++

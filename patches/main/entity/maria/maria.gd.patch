@@ -1,0 +1,9 @@
+--- a/main/entity/maria/maria.gd
++++ b/main/entity/maria/maria.gd
+@@ -6,5 +6,5 @@
+ func _physics_process(_delta: float) -> void :
+ 	if disabled:
+ 		return
+-	if global_position.distance_to(Ref.player.global_position) < 17.0:
++	if global_position.distance_to(Ref.nx_target_position(global_position)) < 17.0:
+ 		queue_free()

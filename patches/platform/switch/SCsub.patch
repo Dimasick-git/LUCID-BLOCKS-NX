@@ -8,18 +8,19 @@
  
  files = [
      "godot_switch.cpp",
-@@ -11,18 +12,21 @@
+@@ -11,18 +12,22 @@
      "gl_manager_switch.cpp",
      "joypad_switch.cpp",
      "switch_mbedtls_entropy.c",
 +    "nx_salty.c",
++    "nx_loading.c",
  ]
  
  prog = env.add_program("#bin/godot", files)
  
  dkp = os.environ["DEVKITPRO"]
 -version_str = "4.7.0"
-+version_str = "0.1.0-test1"
++version_str = "0.1.0-nsp06"
  
 -env.Command(
 -    "nacp_default.nacp",
@@ -36,7 +37,7 @@
  
  env.Command(
      "#bin/switch_${target}.nro",
-@@ -31,3 +35,5 @@
+@@ -31,3 +36,5 @@
      + "/tools/bin/elf2nro $SOURCE $TARGET --icon=platform/switch/icon.jpg --nacp=platform/switch/nacp_default.nacp --romfsdir=platform/switch/romfs",
  )
  env.Depends(target="#bin/switch_${target}.nro", dependency="nacp_default.nacp")

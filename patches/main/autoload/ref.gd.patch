@@ -1,0 +1,32 @@
+--- a/main/autoload/ref.gd
++++ b/main/autoload/ref.gd
+@@ -45,3 +45,29 @@
+ @onready var splash_layer: CanvasLayer = get_tree().get_root().get_node("Main/SplashLayer")
+ @onready var on_screen_keyboard: Control = get_tree().get_root().get_node("Main/%OnscreenKeyboard")
+ @onready var save_notifier: SaveNotifier = get_tree().get_root().get_node("Main/%SaveNotifier")
++
++
++var coop_manager
++var coop_native_patch
++var command_chat_manager
++
++func _ready() -> void:
++    _nx_start_coop.call_deferred()
++
++func _nx_start_coop() -> void:
++    coop_manager = load("res://NxPort/coop_mod/coop_manager.gd").new()
++    coop_manager.name = "LucidBlocksCoop"
++    add_child(coop_manager)
++
++func nx_target_entity(at: Vector3):
++    if coop_manager != null and multiplayer.is_server() and coop_manager.has_connected_remote_peers():
++        return coop_manager.get_nearest_session_player_entity(at, player)
++    return player
++
++func nx_target_position(at: Vector3) -> Vector3:
++    var target = nx_target_entity(at)
++    return target.global_position if is_instance_valid(target) else player.global_position
++
++func nx_target_head(at: Vector3) -> Vector3:
++    var target = nx_target_entity(at)
++    return target.head.global_position if is_instance_valid(target) and is_instance_valid(target.head) else player.head.global_position
