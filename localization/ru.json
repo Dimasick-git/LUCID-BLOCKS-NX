@@ -849,5 +849,7 @@
   "Choose a world — the room will open automatically": "Выберите мир — комната откроется автоматически",
   "Could not open the room. Try again.": "Не удалось открыть комнату. Попробуйте ещё раз.",
   "Connection failed. Search again.": "Подключение не удалось. Запустите поиск снова.",
-  "Searching for a nearby world…": "Поиск мира друга…"
+  "Searching for a nearby world…": "Поиск мира друга…",
+  "Press Interact to respawn at spawn.": "Нажми «Взаимодействие», чтобы вернуться на точку возрождения.",
+  "Respawn failed: waiting for solid ground": "Ожидание загрузки безопасного места для возрождения"
 }

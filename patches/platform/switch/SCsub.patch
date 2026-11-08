@@ -20,7 +20,7 @@
  
  dkp = os.environ["DEVKITPRO"]
 -version_str = "4.7.0"
-+version_str = "0.1.0-nsp06"
++version_str = "0.1.0-nsp07"
  
 -env.Command(
 -    "nacp_default.nacp",

@@ -1499,7 +1499,24 @@ func _enforce_host_background_frame_rate() -> void:
     _bg_tick_log_timer = 0.0
 
 
+var nx_net_stats_elapsed := 0.0
+var nx_net_apply_usec := 0
+var nx_net_apply_count := 0
+var nx_net_spawn_usec := 0
+var nx_net_spawn_max_usec := 0
+var nx_net_spawn_count := 0
+
 func _physics_process(delta: float) -> void:
+    nx_net_stats_elapsed += delta
+    if nx_net_stats_elapsed >= 5.0:
+        if not multiplayer.is_server() and guest_persistent_ready:
+            print("[nx-net] apply_avg_ms=",float(nx_net_apply_usec)/maxi(1,nx_net_apply_count)/1000.0," spawns=",nx_net_spawn_count," spawn_avg_ms=",float(nx_net_spawn_usec)/maxi(1,nx_net_spawn_count)/1000.0," spawn_max_ms=",nx_net_spawn_max_usec/1000.0," queued=",nx_pending_entity_spawns.size())
+        nx_net_stats_elapsed = 0.0
+        nx_net_apply_usec = 0
+        nx_net_apply_count = 0
+        nx_net_spawn_usec = 0
+        nx_net_spawn_max_usec = 0
+        nx_net_spawn_count = 0
     _enforce_coop_pause_override()
     _sync_pause_menu_coop_panel_visibility()
     _sync_main_menu_coop_panel_visibility()
@@ -1510,6 +1527,7 @@ func _physics_process(delta: float) -> void:
     _refresh_host_entity_activity_override(delta)
     _refresh_session_load_radius()
     _flush_pending_remote_world_changes()
+    nx_pump_entity_spawns()
     _tick_entity_interpolation(delta)
     _tick_client_synced_entity_visuals(delta)
     _tick_local_downed_state(delta)
@@ -2075,7 +2093,7 @@ func _refresh_local_downed_overlay() -> void:
     if death_overlay == null or not death_overlay.visible or not local_downed:
         return
 
-    var subtitle: String = "Hold on. Your partner can revive you."
+    var subtitle: String = tr("Hold on. Your partner can revive you.") + " " + tr("Press Interact to respawn at spawn.")
     if _can_offer_manual_partner_respawn():
         subtitle += " " + tr("Press Jump to respawn near your partner.")
     _set_death_overlay_visible(true, subtitle, "DOWNED")
@@ -2093,8 +2111,42 @@ func _respawn_local_downed_near_partner() -> void:
     _update_status_text()
 
 
-func _finish_local_revive(revive_position: Vector3, source_label: String = "Partner") -> void:
+var nx_revive_loading := false
+
+func nx_respawn_at_spawn() -> void:
+    if not local_downed or nx_revive_loading or not _can_sample_player(): return
+    nx_revive_loading = true
+    local_downed_position_valid = false
+    var position: Vector3 = await _resolve_respawn_position()
     if not _can_sample_player():
+        nx_revive_loading = false
+        return
+    Ref.world.load_enabled = true
+    nx_revive_loading = false
+    await _finish_local_revive(position,"Respawn")
+
+func _finish_local_revive(revive_position: Vector3, source_label: String = "Partner") -> void:
+    if not _can_sample_player() or not local_downed:
+        return
+    if nx_revive_loading: return
+    nx_revive_loading = true
+    Ref.player.disabled = true
+    Ref.player.invincible = true
+    local_downed_position = revive_position
+    local_downed_position_valid = true
+    _teleport_local_player_exact(revive_position)
+    for attempt in 200:
+        if not _can_sample_player() or not Ref.world.load_enabled:
+            nx_revive_loading = false
+            return
+        if Ref.world.is_position_loaded(revive_position) and Ref.world.is_position_loaded(revive_position+Vector3(0,-1,0)):
+            break
+        await get_tree().create_timer(0.1).timeout
+    revive_position = _find_safe_respawn_position_near(revive_position,revive_position)
+    nx_revive_loading = false
+    if not _is_safe_respawn_position(revive_position):
+        status_message = "Respawn failed: waiting for solid ground"
+        _update_status_text()
         return
 
     _clear_local_downed_state()
@@ -2147,12 +2199,11 @@ func _begin_double_downed_recovery() -> void:
     _update_status_text()
     _broadcast_local_state_now()
 
-    var host_respawn_position: Vector3 = _resolve_double_downed_host_respawn_position()
-    if host_respawn_position == Vector3.ZERO and not _can_sample_player():
+    await nx_respawn_at_spawn()
+    if not _can_sample_player() or local_downed:
         double_downed_recovery_pending = false
         return
-
-    _finish_local_revive(host_respawn_position, "Recovery")
+    var host_respawn_position: Vector3 = Ref.player.global_position
 
     var guest_respawn_position: Vector3 = _find_safe_respawn_position_near(host_respawn_position, host_respawn_position)
     var active_instance_key: String = get_active_dimension_instance_key()
@@ -2186,6 +2237,10 @@ func _tick_local_downed_state(_delta: float) -> void:
     Ref.player.disabled = true
     _set_local_player_combat_targetable(false)
     _refresh_local_downed_overlay()
+    if nx_revive_loading: return
+    if Input.is_action_just_pressed("interact"):
+        nx_respawn_at_spawn()
+        return
 
     var respawn_key_pressed: bool = Input.is_action_pressed("jump")
     if _can_offer_manual_partner_respawn() and respawn_key_pressed and not downed_respawn_key_down:
@@ -6386,6 +6441,7 @@ func _is_safe_respawn_position(world_position: Vector3) -> bool:
 
 func _find_safe_respawn_position_near(anchor_position: Vector3, fallback_position: Vector3) -> Vector3:
     var centered_anchor: Vector3 = anchor_position.floor() + Vector3(0.5, 0.0, 0.5)
+    if _is_safe_respawn_position(centered_anchor): return centered_anchor
     var offsets: Array[Vector3] = [
         Vector3(1.5, 0.0, 0.0),
         Vector3(-1.5, 0.0, 0.0),
@@ -6410,6 +6466,10 @@ func _find_safe_respawn_position_near(anchor_position: Vector3, fallback_positio
     var default_candidate: Vector3 = centered_anchor + Vector3(1.5, 0.0, 0.0)
     if _is_safe_respawn_position(default_candidate):
         return default_candidate
+    for height in [-1,1,-2,2,-3,3,-4,4,-5,-6,-7,-8]:
+        for offset in [Vector3.ZERO,Vector3(1,0,0),Vector3(-1,0,0),Vector3(0,0,1),Vector3(0,0,-1)]:
+            var candidate: Vector3 = centered_anchor + offset + Vector3(0,height,0)
+            if _is_safe_respawn_position(candidate): return candidate
     return fallback_position
 
 
@@ -7072,6 +7132,8 @@ func _capture_entity_model_head_look_state(root: Node) -> Dictionary:
         return {}
 
     var state: Dictionary = {}
+    for key in ["variant","color_1","color_2","base_color_1","base_color_2"]:
+        if _object_has_property(model,key): state[key] = model.get(key)
     if _object_has_property(model, "look_ratio"):
         state["look_ratio"] = float(model.get("look_ratio"))
     if _object_has_property(model, "look_target"):
@@ -7086,6 +7148,12 @@ func _apply_entity_model_head_look_state(root: Node, state: Dictionary) -> void:
     var model = _find_first_entity_model(root)
     if model == null:
         return
+    var colors_changed := false
+    for key in ["variant","color_1","color_2","base_color_1","base_color_2"]:
+        if state.has(key) and _object_has_property(model,key) and model.get(key) != state[key]:
+            model.set(key,state[key])
+            if key.contains("color_"): colors_changed = true
+    if colors_changed and model.has_method("update_colors"): model.call("update_colors")
 
     if state.has("look_ratio") and _object_has_property(model, "look_ratio"):
         model.set("look_ratio", float(state.get("look_ratio", 0.0)))
@@ -7104,6 +7172,9 @@ func _capture_entity_procedural_visual_state(entity) -> Dictionary:
         return {}
 
     var state: Dictionary = {}
+    if _object_has_property(entity,"variant"): state["variant"] = entity.get("variant")
+    if _object_has_property(entity,"copy_block") and is_instance_valid(entity.get("copy_block")):
+        state["copy_block_id"] = entity.get("copy_block").id
     if _is_segmented_worm_entity(entity):
         state.merge(_capture_worm_segment_visual_state(entity), true)
     var rotation_pivot: Node3D = entity.get_node_or_null("%RotationPivot") as Node3D
@@ -7232,32 +7303,43 @@ func _apply_node_local_rotation(node: Node3D, target_rotation: Variant, weight: 
     )
 
 
-func _apply_entity_procedural_visual_state(entity, state: Dictionary, lerp_weight: float = 1.0) -> void:
+func _apply_entity_procedural_visual_state(entity, state: Dictionary, lerp_weight: float = 1.0, update_properties: bool = true) -> void:
     if entity == null or not is_instance_valid(entity) or state.is_empty():
         return
 
-    entity.set_meta("coop_procedural_visual_state", state.duplicate(true))
+    if update_properties:
+        entity.set_meta("coop_procedural_visual_state", state)
+        if state.has("variant") and _object_has_property(entity,"variant") and entity.get("variant") != state.variant:
+            entity.set("variant",state.variant)
+        if state.has("copy_block_id") and _object_has_property(entity,"copy_block"):
+            var block = ItemMap.id_to_resource.get(int(state.copy_block_id))
+            if block is Block and entity.get("copy_block") != block:
+                entity.set("copy_block",block)
+                if entity.has_method("update_block"): entity.call("update_block")
 
-    if state.has("look_direction") and _object_has_property(entity, "look_direction"):
-        entity.set("look_direction", state.get("look_direction", Vector3.ZERO))
-    if state.has("time") and _object_has_property(entity, "time"):
-        entity.set("time", float(state.get("time", 0.0)))
-    if state.has("angle") and _object_has_property(entity, "angle"):
-        entity.set("angle", float(state.get("angle", 0.0)))
-    if state.has("state") and _object_has_property(entity, "state"):
-        entity.set("state", int(state.get("state", 0)))
-    if state.has("teleport_amount") and _object_has_property(entity, "teleport_amount"):
-        entity.set("teleport_amount", float(state.get("teleport_amount", 0.0)))
-    if state.has("direction") and _object_has_property(entity, "direction"):
-        entity.set("direction", state.get("direction", Vector3.ZERO))
-    if state.has("look_target") and _object_has_property(entity, "look_target"):
-        entity.set("look_target", state.get("look_target", Vector3.ZERO))
-    if state.has("color_1") and _object_has_property(entity, "color_1"):
-        entity.set("color_1", state.get("color_1", Color.WHITE))
-    if state.has("color_2") and _object_has_property(entity, "color_2"):
-        entity.set("color_2", state.get("color_2", Color.WHITE))
-    if (state.has("color_1") or state.has("color_2")) and entity.has_method("update_colors"):
-        entity.call("update_colors")
+        if state.has("look_direction") and _object_has_property(entity, "look_direction"):
+            entity.set("look_direction", state.get("look_direction", Vector3.ZERO))
+        if state.has("time") and _object_has_property(entity, "time"):
+            entity.set("time", float(state.get("time", 0.0)))
+        if state.has("angle") and _object_has_property(entity, "angle"):
+            entity.set("angle", float(state.get("angle", 0.0)))
+        if state.has("state") and _object_has_property(entity, "state"):
+            entity.set("state", int(state.get("state", 0)))
+        if state.has("teleport_amount") and _object_has_property(entity, "teleport_amount"):
+            entity.set("teleport_amount", float(state.get("teleport_amount", 0.0)))
+        if state.has("direction") and _object_has_property(entity, "direction"):
+            entity.set("direction", state.get("direction", Vector3.ZERO))
+        if state.has("look_target") and _object_has_property(entity, "look_target"):
+            entity.set("look_target", state.get("look_target", Vector3.ZERO))
+        var colors_changed := false
+        if state.has("color_1") and _object_has_property(entity, "color_1") and entity.get("color_1") != state.color_1:
+            entity.set("color_1", state.get("color_1", Color.WHITE))
+            colors_changed = true
+        if state.has("color_2") and _object_has_property(entity, "color_2") and entity.get("color_2") != state.color_2:
+            entity.set("color_2", state.get("color_2", Color.WHITE))
+            colors_changed = true
+        if colors_changed and entity.has_method("update_colors"):
+            entity.call("update_colors")
 
     _apply_node_local_rotation(entity.get_node_or_null("%RotationPivot") as Node3D, state.get("rotation_pivot_rotation", null), lerp_weight)
     _apply_node_local_rotation(entity.get_node_or_null("%BodyModel") as Node3D, state.get("body_model_rotation", null), lerp_weight)
@@ -7480,10 +7562,12 @@ func _advance_client_animation_tree(entity, delta: float) -> void:
     animation_tree.active = true
     if not bool(animation_tree.get_meta("coop_manual_advance_initialized", false)):
         animation_tree.set_meta("coop_manual_advance_initialized", true)
+        animation_tree.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
         animation_tree.set_process(false)
         animation_tree.set_physics_process(false)
-        var animation_player: AnimationPlayer = _find_first_animation_player(entity)
+        var animation_player: AnimationPlayer = animation_tree.get_node_or_null(animation_tree.get_animation_player()) as AnimationPlayer
         if animation_player != null:
+            animation_player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
             animation_player.set_process(false)
             animation_player.set_physics_process(false)
     animation_tree.advance(delta)
@@ -7496,7 +7580,7 @@ func _update_client_procedural_entity_visuals(entity, delta: float) -> void:
     var state = entity.get_meta("coop_procedural_visual_state", {}) if entity.has_meta("coop_procedural_visual_state") else {}
     if state is Dictionary and not state.is_empty():
         var lerp_weight: float = clampf(delta * 12.0, 0.0, 1.0)
-        _apply_entity_procedural_visual_state(entity, state, lerp_weight)
+        _apply_entity_procedural_visual_state(entity, state, lerp_weight, false)
 
     var script_path: String = _get_object_script_path(entity)
     if script_path.ends_with("/bee.gd"):
@@ -9701,7 +9785,8 @@ func _capture_host_entity_snapshots(focus_position: Vector3) -> Array:
         var entity = child as Entity
         if not is_instance_valid(entity) or not entity.is_inside_tree():
             continue
-        if entity.global_position.distance_squared_to(focus_position) > ENTITY_SYNC_RADIUS * ENTITY_SYNC_RADIUS:
+        var interest_radius := minf(ENTITY_SYNC_RADIUS,float(Ref.world.instance_radius)+8.0) if OS.has_feature("switch") else ENTITY_SYNC_RADIUS
+        if entity.global_position.distance_squared_to(focus_position) > interest_radius * interest_radius:
             continue
 
         var scene_path: String = _get_sync_scene_path(entity)
@@ -9722,22 +9807,25 @@ func _capture_host_entity_snapshots(focus_position: Vector3) -> Array:
                 var held_item_state = inventory.items[held_item_index]
                 held_item_id = int(held_item_state.id) if held_item_state != null else -1
 
-        var special_state: Dictionary = {}
+        var special_state: Dictionary = entity.get_meta("nx_visual_snapshot", {})
         var last_visual_state_sent: float = float(host_entity_last_sent.get(uuid, -1000.0))
         var force_procedural_visual_sync: bool = _is_segmented_worm_entity(entity)
-        var should_capture_visual_state: bool = force_procedural_visual_sync or (host_server_time - last_visual_state_sent) >= ENTITY_VISUAL_STATE_INTERVAL
+        var should_capture_visual_state: bool = special_state.is_empty() or (host_server_time - last_visual_state_sent) >= ENTITY_VISUAL_STATE_INTERVAL
         if should_capture_visual_state:
             var horizontal_speed: float = Vector3(entity.velocity.x, 0.0, entity.velocity.z).length()
             var base_speed: float = _resolve_object_float_property(entity, ["speed"], 1.0)
             var speed_modifier: float = _resolve_object_float_property(entity, ["speed_modifier"], 1.0)
             var walk_value: float = clampf(horizontal_speed / maxf(base_speed * speed_modifier, 0.001), 0.0, 1.0)
             special_state = {
+                "health":entity.health,
+                "max_health":entity.max_health,
                 "under_water": bool(entity.under_water),
                 "walk_val": walk_value,
                 "compact_anim": _capture_compact_animation_state(entity),
                 "head_look": _capture_entity_model_head_look_state(entity),
                 "procedural_visual": _capture_entity_procedural_visual_state(entity),
             }
+            entity.set_meta("nx_visual_snapshot",special_state)
             if (host_server_time - last_visual_state_sent) >= ENTITY_VISUAL_STATE_INTERVAL:
                 host_entity_last_sent[uuid] = host_server_time
                 _maybe_broadcast_host_entity_projectile_visual(entity, special_state)
@@ -9786,6 +9874,9 @@ func _object_has_property(target: Object, property_name: String) -> bool:
 func _apply_entity_special_state(entity, special_state: Dictionary) -> void:
     if entity == null or not is_instance_valid(entity) or special_state.is_empty():
         return
+    if entity is Entity:
+        if special_state.has("max_health") and entity.max_health != int(special_state.max_health): entity.max_health = int(special_state.max_health)
+        if special_state.has("health") and entity.health != int(special_state.health): entity.health = int(special_state.health)
 
     if entity is Entity and special_state.has("under_water"):
         entity.under_water = bool(special_state.get("under_water", false))
@@ -9819,12 +9910,15 @@ func _apply_client_world_state(sequence: int, drop_snapshots: Array, entity_snap
     if sequence <= client_last_world_state_sequence:
         return
     client_last_world_state_sequence = sequence
+    var apply_started := Time.get_ticks_usec()
     _prepare_client_world_sync()
     if ENABLE_ENTITY_SYNC:
         _apply_client_entity_snapshots(entity_snapshots, sequence)
     else:
         _purge_client_entities()
     _apply_client_drop_snapshots(drop_snapshots)
+    nx_net_apply_usec += Time.get_ticks_usec()-apply_started
+    nx_net_apply_count += 1
 
 
 func _purge_client_entities() -> void:
@@ -9839,7 +9933,22 @@ func _purge_client_entities() -> void:
             child.call_deferred("queue_free")
 
 
-func _apply_client_entity_snapshots(entity_snapshots: Array, sequence: int = 0) -> void:
+var nx_pending_entity_spawns: Dictionary = {}
+var nx_entity_spawn_frame := -1
+var nx_entity_spawn_instance := ""
+
+func nx_pump_entity_spawns() -> void:
+    if multiplayer.is_server() or not guest_persistent_ready or receiving_host_world or not _has_live_peer() or nx_entity_spawn_instance != get_active_dimension_instance_key():
+        nx_pending_entity_spawns.clear()
+        return
+    if nx_pending_entity_spawns.is_empty() or nx_entity_spawn_frame == Engine.get_process_frames(): return
+    var uuid = nx_pending_entity_spawns.keys()[0]
+    var pending: Array = nx_pending_entity_spawns[uuid]
+    nx_pending_entity_spawns.erase(uuid)
+    _apply_client_entity_snapshots([pending[0]],int(pending[1]),false)
+
+func _apply_client_entity_snapshots(entity_snapshots: Array, sequence: int = 0, prune: bool = true) -> void:
+    nx_entity_spawn_instance = get_active_dimension_instance_key()
     var visible_uuids: Dictionary = {}
 
     for entry in entity_snapshots:
@@ -9907,6 +10016,11 @@ func _apply_client_entity_snapshots(entity_snapshots: Array, sequence: int = 0) 
         if not is_instance_valid(entity):
             entity = _find_existing_entity_by_scene_and_position(scene_path, entity_position)
         if not is_instance_valid(entity):
+            if nx_entity_spawn_frame == Engine.get_process_frames():
+                nx_pending_entity_spawns[uuid] = [entry,sequence]
+                continue
+            nx_entity_spawn_frame = Engine.get_process_frames()
+            nx_pending_entity_spawns.erase(uuid)
             entity = _spawn_client_synced_entity(uuid, scene_path)
         if not is_instance_valid(entity):
             continue
@@ -9927,7 +10041,10 @@ func _apply_client_entity_snapshots(entity_snapshots: Array, sequence: int = 0) 
         _apply_entity_special_state(entity, special_state)
         _apply_client_entity_snapshot(entity, entity_position, entity_yaw, entity_velocity, server_time, movement_velocity, gravity_velocity, knockback_velocity, rope_velocity, sequence)
 
-    _remove_unlisted_client_entities(visible_uuids)
+    if prune:
+        for uuid in nx_pending_entity_spawns.keys():
+            if not visible_uuids.has(uuid): nx_pending_entity_spawns.erase(uuid)
+        _remove_unlisted_client_entities(visible_uuids)
 
 
 func _apply_client_drop_snapshots(drop_snapshots: Array) -> void:
@@ -9985,6 +10102,7 @@ func _apply_client_drop_snapshots(drop_snapshots: Array) -> void:
 
 
 func _spawn_client_synced_entity(uuid: String, scene_path: String):
+    var spawn_started := Time.get_ticks_usec()
     var scene = load(scene_path)
     if not (scene is PackedScene):
         return null
@@ -9998,6 +10116,10 @@ func _spawn_client_synced_entity(uuid: String, scene_path: String):
     entity.set_meta("coop_source_scene_path", scene_path)
     get_tree().get_root().add_child(entity)
     _configure_client_synced_entity(entity, uuid)
+    var spawn_usec := Time.get_ticks_usec()-spawn_started
+    nx_net_spawn_usec += spawn_usec
+    nx_net_spawn_max_usec = maxi(nx_net_spawn_max_usec,spawn_usec)
+    nx_net_spawn_count += 1
     return entity
 
 
@@ -10130,12 +10252,12 @@ func _configure_client_synced_entity(entity, uuid: String) -> void:
     if not tracked_root_entities.has(entity):
         tracked_root_entities.append(entity)
     var runtime_configured: bool = bool(entity.get_meta("coop_client_runtime_configured", false))
+    if runtime_configured: return
     if not runtime_configured:
         _disable_client_entity_runtime(entity, true)
         _restore_client_entity_runtime_branches(entity)
         entity.set_meta("coop_client_runtime_configured", true)
     _restore_client_entity_interact_area(entity)
-    _ensure_client_entity_hit_proxy(entity)
     if entity is Entity:
         entity.disabled_by_visibility = false
         entity.invincible = true
@@ -10148,8 +10270,6 @@ func _configure_client_synced_entity(entity, uuid: String) -> void:
         if visible_enabler != null:
             visible_enabler.enable_node_path = ""
             visible_enabler.process_mode = Node.PROCESS_MODE_DISABLED
-        elif not runtime_configured:
-            _ensure_client_entity_hit_proxy(entity)
         _set_client_entity_hit_proxy_enabled(entity, not entity.dead and not entity.disabled)
 
 
@@ -10193,12 +10313,8 @@ func _disable_client_entity_runtime(root: Node, preserve_interact_branch: bool =
 
 
 func _find_client_entity_hit_proxy(entity):
-    if entity == null or not is_instance_valid(entity):
-        return null
-    var rotation_pivot: Node = entity.get_node_or_null("%RotationPivot")
-    if rotation_pivot == null:
-        return null
-    return rotation_pivot.get_node_or_null("CoopHitArea") as Area3D
+    if entity == null or not is_instance_valid(entity): return null
+    return entity.get_node_or_null("%InteractArea3D") as Area3D
 
 
 func _tag_client_entity_hit_owner(node: Node, entity) -> void:
@@ -10216,10 +10332,10 @@ func _restore_client_entity_interact_area(entity) -> void:
     var source_area: Area3D = entity.get_node_or_null("%InteractArea3D") as Area3D
     if source_area == null:
         return
-    source_area.monitoring = false
-    source_area.monitorable = true
-    source_area.collision_layer = 4112
-    source_area.collision_mask = 0
+    source_area.set_deferred("monitoring", false)
+    source_area.set_deferred("monitorable", true)
+    source_area.set_deferred("collision_layer", 4112)
+    source_area.set_deferred("collision_mask", 0)
     source_area.owner = entity
     _tag_client_entity_hit_owner(source_area, entity)
     for child in source_area.get_children():
@@ -10227,70 +10343,15 @@ func _restore_client_entity_interact_area(entity) -> void:
             child.set_deferred("disabled", false)
 
 
-func _ensure_client_entity_hit_proxy(entity) -> void:
-    if entity == null or not is_instance_valid(entity):
-        return
-    var rotation_pivot: Node3D = entity.get_node_or_null("%RotationPivot") as Node3D
-    var source_area: Area3D = entity.get_node_or_null("%InteractArea3D") as Area3D
-    if rotation_pivot == null or source_area == null:
-        return
-
-    var proxy_area: Area3D = _find_client_entity_hit_proxy(entity)
-    if proxy_area == null:
-        proxy_area = Area3D.new()
-        proxy_area.name = "CoopHitArea"
-        rotation_pivot.add_child(proxy_area)
-        proxy_area.owner = entity
-
-    proxy_area.monitoring = false
-    proxy_area.monitorable = true
-    proxy_area.collision_layer = int(source_area.collision_layer)
-    proxy_area.collision_mask = int(source_area.collision_mask)
-    proxy_area.transform = source_area.transform
-    proxy_area.set_meta("coop_hit_owner", entity)
-
-    var shape_index: int = 0
-    for child in source_area.get_children():
-        if child is CollisionShape3D:
-            var source_shape := child as CollisionShape3D
-            var proxy_shape: CollisionShape3D = null
-            if shape_index < proxy_area.get_child_count() and proxy_area.get_child(shape_index) is CollisionShape3D:
-                proxy_shape = proxy_area.get_child(shape_index) as CollisionShape3D
-            else:
-                proxy_shape = CollisionShape3D.new()
-                proxy_area.add_child(proxy_shape)
-                proxy_shape.owner = entity
-            proxy_shape.shape = source_shape.shape
-            proxy_shape.transform = source_shape.transform
-            proxy_shape.disabled = source_shape.disabled
-            proxy_shape.set_meta("coop_hit_owner", entity)
-            shape_index += 1
-        elif child is CollisionPolygon3D:
-            var source_polygon := child as CollisionPolygon3D
-            var proxy_polygon: CollisionPolygon3D = null
-            if shape_index < proxy_area.get_child_count() and proxy_area.get_child(shape_index) is CollisionPolygon3D:
-                proxy_polygon = proxy_area.get_child(shape_index) as CollisionPolygon3D
-            else:
-                proxy_polygon = CollisionPolygon3D.new()
-                proxy_area.add_child(proxy_polygon)
-                proxy_polygon.owner = entity
-            proxy_polygon.polygon = source_polygon.polygon
-            proxy_polygon.transform = source_polygon.transform
-            proxy_polygon.disabled = source_polygon.disabled
-            proxy_polygon.set_meta("coop_hit_owner", entity)
-            shape_index += 1
-
-    while proxy_area.get_child_count() > shape_index:
-        proxy_area.get_child(proxy_area.get_child_count() - 1).queue_free()
-
-
 func _set_client_entity_hit_proxy_enabled(entity, enabled: bool) -> void:
     var proxy_area: Area3D = _find_client_entity_hit_proxy(entity)
     if proxy_area == null:
         return
-    proxy_area.monitorable = enabled
-    proxy_area.collision_layer = 4112 if enabled else 0
-    proxy_area.collision_mask = 0
+    if proxy_area.has_meta("nx_enabled") and bool(proxy_area.get_meta("nx_enabled")) == enabled: return
+    proxy_area.set_meta("nx_enabled",enabled)
+    proxy_area.set_deferred("monitorable", enabled)
+    proxy_area.set_deferred("collision_layer", 4112 if enabled else 0)
+    proxy_area.set_deferred("collision_mask", 0)
     for child in proxy_area.get_children():
         if _object_has_property(child, "disabled"):
             child.set_deferred("disabled", not enabled)
@@ -11440,10 +11501,11 @@ func _schedule_client_visual_projectile_cleanup(projectile, lifetime: float = VI
     if projectile == null or not is_instance_valid(projectile) or get_tree() == null:
         return
     var cleanup_timer: SceneTreeTimer = get_tree().create_timer(lifetime, false)
-    cleanup_timer.timeout.connect(func() -> void:
-        if is_instance_valid(projectile):
-            _queue_runtime_node_for_cleanup(projectile)
-    )
+    cleanup_timer.timeout.connect(_cleanup_client_visual_projectile.bind(weakref(projectile)))
+
+func _cleanup_client_visual_projectile(reference: WeakRef) -> void:
+    var projectile = reference.get_ref()
+    if is_instance_valid(projectile): _queue_runtime_node_for_cleanup(projectile)
 
 
 func _disable_client_visual_projectile_damage(root: Node) -> void:

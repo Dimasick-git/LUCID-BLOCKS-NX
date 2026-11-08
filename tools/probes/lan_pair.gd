@@ -17,12 +17,27 @@ var expected_peers := 1
 var client_index := 0
 var all_peers_ready := false
 var all_ready_at := 0.0
+var gameplay_mode := false
+var gameplay_started := false
+var gameplay_passed := false
+var test_mob: Entity
+var combat_client_sent := false
+var combat_initial_health := 0
+var combat_stage := 0
+var test_death_position := Vector3.ZERO
+var entities_mode := false
+var entities_passed := false
+var test_entities: Array[Entity] = []
+var npc_names = ["manikin","kodama","mimic","gel","moth","hwobbb"]
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
     for arg in OS.get_cmdline_user_args():
         if arg.begins_with("--role="): role = arg.trim_prefix("--role=")
         if arg == "--scan-only": scan_only = true
+        if arg == "--gameplay": gameplay_mode = true
+        if arg == "--entities": entities_mode = true
+        if arg.begins_with("--npc="): npc_names = [arg.trim_prefix("--npc=")]
         if arg.begins_with("--expected-peers="): expected_peers = int(arg.get_slice("=",1))
         if arg.begins_with("--client-index="): client_index = int(arg.get_slice("=",1))
 
@@ -41,6 +56,10 @@ func _process(delta: float) -> void:
         run.call_deferred()
     if not running or ref.coop_manager == null: return
     var manager = ref.coop_manager
+    if gameplay_mode and all_peers_ready:
+        tick_gameplay(ref,manager)
+    if entities_mode and all_peers_ready:
+        tick_entity_appearance(ref,manager)
     if manager.multiplayer.get_peers().size() == expected_peers and manager.peer_states.size() == expected_peers+1 and manager.markers.size() == expected_peers:
         var active_count := 0
         for state in manager.peer_states.values():
@@ -81,7 +100,7 @@ func _process(delta: float) -> void:
             print("LAN_PAIR_GUEST_BREAK_RECEIVED")
             connected_at = elapsed
             host_phase = 3
-        elif host_phase == 3 and all_peers_ready and elapsed - all_ready_at > 25.0 and visuals_verified:
+        elif host_phase == 3 and all_peers_ready and elapsed - all_ready_at > 25.0 and visuals_verified and (not gameplay_mode or gameplay_passed) and (not entities_mode or entities_passed):
             print("LAN_PAIR_STABLE role=host shared_block=true")
             get_tree().quit(0)
     if role == "client" and manager.guest_persistent_ready and ref.world.load_enabled and not ref.player.disabled and not ready_reported:
@@ -100,7 +119,7 @@ func _process(delta: float) -> void:
             block_seen = true
             print("LAN_PAIR_HOST_PLACE_RECEIVED")
             manager.request_break_block.rpc_id(1, manager.get_active_dimension_instance_key(), TEST_CELL, TEST_BLOCK, false, false, false, false, false)
-        elif block_seen and block != null and block.id != TEST_BLOCK and all_peers_ready and elapsed - all_ready_at > 18.0 and visuals_verified:
+        elif block_seen and block != null and block.id != TEST_BLOCK and all_peers_ready and elapsed - all_ready_at > 18.0 and visuals_verified and (not gameplay_mode or gameplay_passed) and (not entities_mode or entities_passed):
             if not leaving:
                 leaving = true
                 leave_and_verify.call_deferred()
@@ -142,6 +161,174 @@ func exercise_visuals() -> void:
             0: hand.idle()
         await get_tree().create_timer(0.15).timeout
 
+var entity_acks: Dictionary = {}
+
+func tick_entity_appearance(ref,manager) -> void:
+    ref.player.invincible = true
+    if role == "host":
+        if test_entities.is_empty():
+            var orphans_before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+            for npc_name in npc_names:
+                var folder: String = "bubblebear" if npc_name == "hwobbb" else npc_name
+                var entity: Entity = load("res://main/entity/"+folder+"/"+npc_name+".tscn").instantiate()
+                entity.set_meta("coop_uuid","nx-appearance-"+npc_name)
+                get_tree().root.add_child(entity)
+                entity.max_health = 200
+                entity.health = 200
+                entity.invincible = true
+                var model = manager._find_first_entity_model(entity)
+                if model != null and "variant" in model: model.variant = maxi(0,model.variants-1)
+                if model != null and "base_color_1" in model:
+                    model.base_color_1 = Color(0.8,0.2,0.4)
+                    model.base_color_2 = Color(0.2,0.8,0.4)
+                    model.update_colors()
+                if "color_1" in entity:
+                    entity.color_1 = Color(0.8,0.2,0.4)
+                    entity.color_2 = Color(0.2,0.8,0.4)
+                    entity.update_colors()
+                if "core_models" in entity: entity.variant = entity.core_models.size()-1
+                if "copy_block" in entity:
+                    entity.copy_block = ItemMap.map(TEST_BLOCK)
+                    entity.update_block()
+                test_entities.append(entity)
+                entity.global_position = Vector3((test_entities.size()-1)*1.5-3,2,-2)
+                if entity.has_method("override_position"): entity.override_position()
+            var orphans_after := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+            print("LAN_ENTITIES_ORPHANS before=",orphans_before," after=",orphans_after)
+            assert(orphans_after <= orphans_before,"NPC creation does not leak unparented nodes")
+        for i in test_entities.size():
+            if is_instance_valid(test_entities[i]):
+                if not test_entities[i].has_method("override_position"):
+                    test_entities[i].global_position = Vector3(i*1.5-3,1,-2)
+                    test_entities[i].set_physics_process(false)
+    elif not entities_passed:
+        for npc_name in npc_names:
+            var entity = manager.synced_entities.get("nx-appearance-"+npc_name)
+            if not is_instance_valid(entity): return
+            var model = manager._find_first_entity_model(entity)
+            if model != null and "variant" in model and model.variant != maxi(0,model.variants-1): return
+            if model != null and "base_color_1" in model and not model.base_color_1.is_equal_approx(Color(0.8,0.2,0.4)): return
+            if "color_1" in entity and not entity.color_1.is_equal_approx(Color(0.8,0.2,0.4)): return
+            if "core_models" in entity and entity.variant != entity.core_models.size()-1: return
+            if "copy_block" in entity and (entity.copy_block == null or entity.copy_block.id != TEST_BLOCK): return
+        entities_passed = true
+        print("LAN_ENTITIES_PASSED role=client index=",client_index," count=",npc_names.size())
+        entities_result.rpc_id(1)
+
+@rpc("any_peer","call_remote","reliable")
+func entities_result() -> void:
+    if role != "host": return
+    entity_acks[multiplayer.get_remote_sender_id()] = true
+    if entity_acks.size() == expected_peers:
+        entities_passed = true
+        print("LAN_ENTITIES_PASSED role=host guests=",entity_acks.size())
+
+func tick_gameplay(ref,manager) -> void:
+    if role == "host":
+        if not gameplay_started:
+            gameplay_started = true
+            test_mob = load("res://main/entity/manikin/manikin.tscn").instantiate()
+            test_mob.set_meta("coop_uuid","nx-combat-target")
+            get_tree().root.add_child(test_mob)
+            test_mob.global_position = Vector3(0.5,1,-2.0)
+            test_mob.invincible = false
+            test_mob.invincible_temporary = false
+            test_mob.direct_damage_cooldown = false
+            test_mob.can_endure = false
+            test_mob.disabled = false
+            combat_initial_health = test_mob.health
+            var floor_changes: Array = []
+            for x in range(-4,5):
+                for z in range(-4,5): floor_changes.append([Vector3i(x,0,z),TEST_BLOCK])
+            manager.broadcast_host_world_changes(floor_changes,[])
+            print("LAN_COMBAT_HOST_SPAWN health=",test_mob.health)
+        if is_instance_valid(test_mob):
+            test_mob.global_position = Vector3(0.5,1,-2.0)
+            test_mob.set_physics_process(false)
+            if test_mob.health < combat_initial_health:
+                print("LAN_COMBAT_HOST_DAMAGE_CONFIRMED health=",test_mob.health)
+                combat_initial_health = test_mob.health
+            if test_mob.dead and combat_stage == 0:
+                var ghost_attack = test_mob.get_node_or_null("%Attack")
+                if ghost_attack != null:
+                    assert(not ghost_attack.attack(ref.player,ref.player.global_position),"dead mob cannot attack")
+                    print("LAN_DEAD_MOB_ATTACK_REJECTED")
+                combat_stage = 1
+        if combat_stage == 1:
+            for id in manager.peer_states:
+                if int(id) != 1 and manager.peer_states[id].get("downed",false):
+                    print("LAN_REVIVE_HOST_REQUEST position=",manager.peer_states[id].position)
+                    manager._host_attempt_revive(1,int(id))
+                    combat_stage = 2
+    elif not combat_client_sent:
+        var target = manager.synced_entities.get("nx-combat-target")
+        if is_instance_valid(target):
+            combat_client_sent = true
+            attack_real_target.call_deferred(target)
+
+func attack_real_target(target: Entity) -> void:
+    var ref = get_node("/root/Ref")
+    ref.player.global_position = Vector3(0.5,1,0.5)
+    ref.coop_manager._reset_local_player_motion()
+    var ray: RayCast3D = ref.player.get_node("%InteractRayCast3D")
+    var area: Area3D = target.get_node("%InteractArea3D")
+    ray.target_position = ray.to_local(area.global_position)
+    await get_tree().physics_frame
+    await get_tree().physics_frame
+    var data: Dictionary = ref.player.get_interact_data()
+    print("LAN_COMBAT_RAY target=",data.get("target")," expected=",target," cooldown=",target.direct_damage_cooldown," disabled=",target.disabled," collider=",ray.get_collider()," player=",ref.player.global_position," mob=",target.global_position," begin=",data.interact_begin," end=",data.interact_end," fallback=",ref.coop_manager.find_client_ray_attack_target(data.interact_begin,data.interact_end))
+    if data.get("target") != target:
+        printerr("LAN_COMBAT_RAY_TARGET_FAILED")
+        get_tree().quit(8)
+        return
+    var attack = ref.player.get_node("%Attack")
+    var initial_health: int = target.health
+    for i in 3:
+        var result: bool = attack.attack(target,area.global_position,0,0)
+        print("LAN_COMBAT_ATTACK_SENT result=",result," round=",i)
+        await get_tree().create_timer(0.7).timeout
+    assert(target.health <= initial_health-3,"three client hits reduce authoritative health")
+    print("LAN_COMBAT_REPEAT_PASSED health=",target.health)
+    attack.damage = 999
+    attack.attack(target,area.global_position,0,0)
+    await get_tree().create_timer(0.5).timeout
+    assert(not is_instance_valid(target) or target.dead,"client sees authoritative death")
+    attack.damage = 1
+    print("LAN_COMBAT_DEATH_PASSED")
+    ref.player.die()
+    assert(ref.coop_manager.local_downed,"real death is intercepted by co-op")
+    test_death_position = ref.player.global_position
+    for attempt in 150:
+        if not ref.coop_manager.local_downed: break
+        await get_tree().create_timer(0.1).timeout
+    assert(not ref.coop_manager.local_downed,"host revives guest")
+    assert(ref.player.health == int(ceil(ref.player.max_health*0.5)),"revive grants half health")
+    assert(ref.player.global_position.distance_to(test_death_position)<1.0,"revived where downed")
+    assert(ref.coop_manager._is_safe_respawn_position(ref.player.global_position),"revive has solid ground")
+    print("LAN_REVIVE_IN_PLACE_PASSED health=",ref.player.health)
+    await get_tree().create_timer(0.3).timeout
+    ref.world.respawn_positions[Vector3i(3,1,3)] = true
+    ref.coop_manager._enter_local_downed_state()
+    await ref.coop_manager.nx_respawn_at_spawn()
+    assert(not ref.coop_manager.local_downed,"manual spawn respawn completes")
+    assert(ref.player.global_position.distance_to(Vector3(3.5,1,3.5))<1.0,"respawns at marked spawn")
+    print("LAN_RESPAWN_AT_SPAWN_PASSED position=",ref.player.global_position)
+    ref.coop_manager._enter_local_downed_state()
+    ref.coop_manager._respawn_local_downed_near_partner()
+    await get_tree().create_timer(0.5).timeout
+    assert(not ref.coop_manager.local_downed,"manual partner respawn completes")
+    assert(ref.player.global_position.distance_to(ref.coop_manager.peer_states[1].position)<3.2,"respawns near teammate")
+    print("LAN_RESPAWN_NEAR_PARTNER_PASSED position=",ref.player.global_position)
+    gameplay_passed = true
+    print("LAN_GAMEPLAY_PASSED role=client")
+    gameplay_result.rpc_id(1)
+
+@rpc("any_peer","call_remote","reliable")
+func gameplay_result() -> void:
+    if role == "host" and combat_stage != 2: return
+    gameplay_passed = true
+    print("LAN_GAMEPLAY_PASSED role=",role)
+
 func run() -> void:
     elapsed = 0.0
     var ref = get_node("/root/Ref")
@@ -170,6 +357,10 @@ func run() -> void:
         register.set_data("progression_disabled", true)
         ref.save_file_manager.load_file(register, false)
         await ref.main.enter_game(true, true)
+        if gameplay_mode or entities_mode:
+            for x in range(-4,5):
+                for z in range(-4,5):
+                    ref.world.place_block_at(Vector3(x,0,z),ItemMap.map(TEST_BLOCK),false,false)
         print("LAN_PAIR_HOST_WORLD_READY position=", ref.player.global_position)
         assert(manager.has_active_session(), "Selecting a world starts hosting automatically")
         await get_tree().process_frame

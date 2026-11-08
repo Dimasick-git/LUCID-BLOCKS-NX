@@ -27,7 +27,7 @@ def validate_nro(path):
         file.seek(size+offset);nacp=file.read(length)
         assert nacp[:0x200].split(b'\0')[0]==b'Lucid Blocks NX','NACP title'
         assert nacp[0x200:0x300].split(b'\0')[0]==b'Dimasick-git','NACP publisher'
-        assert nacp[0x3060:0x3070].split(b'\0')[0] in (b'0.1.0-test1',b'0.1.0-nsp03',b'0.1.0-nsp04',b'0.1.0-nsp05',b'0.1.0-nsp06'),'NACP version'
+        assert nacp[0x3060:0x3070].split(b'\0')[0] in (b'0.1.0-test1',b'0.1.0-nsp03',b'0.1.0-nsp04',b'0.1.0-nsp05',b'0.1.0-nsp06',b'0.1.0-nsp07'),'NACP version'
     return {'segments_and_assets_valid':True,'program_bytes':size,'total_bytes':path.stat().st_size}
 
 def main():

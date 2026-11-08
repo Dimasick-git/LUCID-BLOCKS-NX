@@ -1,6 +1,27 @@
 --- a/main/entity/player/player.gd
 +++ b/main/entity/player/player.gd
-@@ -702,3 +702,6 @@
+@@ -515,7 +515,7 @@
+ 				%WhiffPlayer.play()
+ 				if is_instance_valid(data.target) and not data.target.dead:
+ 					%Camera3D.camera_shake()
+-				%Attack.attack(data.target, %InteractRayCast3D.get_collision_point())
++				%Attack.attack(data.target, data.get("attack_position", %InteractRayCast3D.get_collision_point()))
+ 				%PlayerHand.current_hand.hit()
+ 
+ 			elif "target_position" in data:
+@@ -692,6 +692,11 @@
+ 				data.target_position = target_position
+ 				data.target_position_adjacent = (data.target_position + %InteractRayCast3D.get_collision_normal())
+ 
++	if not skip_look and Ref.coop_manager != null and Ref.coop_manager.is_client_session() and not data.has("target"):
++		var target = Ref.coop_manager._resolve_client_attack_target(%InteractRayCast3D.get_collider()) if %InteractRayCast3D.is_colliding() else Ref.coop_manager.find_client_ray_attack_target(data.interact_begin, data.interact_end)
++		if target is Entity and not target.dead and not target.disabled:
++			data.target = target
++			data.attack_position = Ref.coop_manager.get_client_attack_hit_position(target, data.interact_begin, data.interact_end)
+ 	return data
+ 
+ 
+@@ -702,3 +707,6 @@
  		return true
  	var block: Block = Ref.world.get_block_type_at(p)
  	return block.no_collision_block

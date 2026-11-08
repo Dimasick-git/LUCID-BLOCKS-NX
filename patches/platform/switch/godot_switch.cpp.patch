@@ -273,7 +273,7 @@
 +            return EXIT_FAILURE;
 +        }
 +    }
-+    printf("[lucid-nx] NSP06 FOUR PLAYER STREAMING: required voxel classes present\n");
++    printf("[lucid-nx] NSP07 COMBAT AND REVIVE: required voxel classes present\n");
 +
 +    // Exercise the exact constructor callback that faulted before loading scenes.
 +    for (const char *class_name : {"Essence", "Item"}) {

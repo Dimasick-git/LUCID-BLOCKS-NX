@@ -2,8 +2,8 @@ extends Node
 
 const DISCOVERY_PORT := 24568
 const BROWSER_PORT := 24569
-const DISCOVER := "LBNX4:DISCOVER"
-const PROTOCOL := "LBNX4"
+const DISCOVER := "LBNX5:DISCOVER"
+const PROTOCOL := "LBNX5"
 const GAME_PORT := 24567
 const MAX_PLAYERS := 4
 var server: PacketPeerUDP

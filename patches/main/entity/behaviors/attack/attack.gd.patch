@@ -1,11 +1,15 @@
 --- a/main/entity/behaviors/attack/attack.gd
 +++ b/main/entity/behaviors/attack/attack.gd
-@@ -5,34 +5,70 @@
+@@ -5,34 +5,74 @@
  
  var damage_modifier: float = 1.0
  
 -func attack(target: Entity, damage_position: Vector3, knockback_strength: float = 22.0, fly_strength: float = 0.15) -> bool:
 +func attack(target, damage_position: Vector3, knockback_strength: float = 22.0, fly_strength: float = 0.15) -> bool:
++	if entity.dead:
++		return false
++	if entity != Ref.player and Ref.coop_manager != null and Ref.coop_manager.is_client_session() and Ref.coop_manager.is_client_synced_entity(entity):
++		return false
 +	if Ref.coop_manager != null and not multiplayer.is_server() and entity == Ref.player:
 +		target = Ref.coop_manager._resolve_client_attack_target(target)
  	if not is_instance_valid(target) or entity.disabled or not enabled or target.dead or not is_inside_tree() or not target.is_inside_tree():
@@ -81,7 +85,7 @@
  
  	if entity.held_item != null and entity.held_item.item is Tool:
  		entity.decrease_held_item_durability(1)
-@@ -52,3 +88,4 @@
+@@ -52,3 +92,4 @@
  		target.get_node("%Bleed").bleed(damage_position, direction, direct_damage)
  	if burns and target.has_node("%Burn"):
  		target.get_node("%Burn").ignite()

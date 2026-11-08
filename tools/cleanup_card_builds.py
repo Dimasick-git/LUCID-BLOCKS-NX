@@ -18,7 +18,7 @@ def clean(root, build='NSP03', rollback_build='NSP02'):
     if deployed['files'][current_name]['sha256']!=local['sha256']:
         raise ValueError('Current build has not been verified on this card')
     removed=[]
-    for name in ('LUCID_BLOCKS_NX_FULL_NSP01.nsp','LUCID_BLOCKS_NX_FULL_NSP02.nsp','LUCID_BLOCKS_NX_FULL_NSP03.nsp','LUCID_BLOCKS_NX_FULL_NSP04.nsp','LUCID_BLOCKS_NX_FULL_NSP05.nsp','LUCID_BLOCKS_NX_forwarder.nsp'):
+    for name in ('LUCID_BLOCKS_NX_FULL_NSP01.nsp','LUCID_BLOCKS_NX_FULL_NSP02.nsp','LUCID_BLOCKS_NX_FULL_NSP03.nsp','LUCID_BLOCKS_NX_FULL_NSP04.nsp','LUCID_BLOCKS_NX_FULL_NSP05.nsp','LUCID_BLOCKS_NX_FULL_NSP06.nsp','LUCID_BLOCKS_NX_forwarder.nsp'):
         if name == current_name: continue
         p=root/name
         if p.is_file():
@@ -39,7 +39,7 @@ def clean(root, build='NSP03', rollback_build='NSP02'):
                 raise ValueError('Unexpected rollback target')
             files=[p for p in folder.rglob('*') if p.is_file()]
             for p in files:
-                if p.name not in ('lucid-blocks.nro','game.pck','README.txt','LUCID_BLOCKS_NX_FULL_NSP03.nsp','LUCID_BLOCKS_NX_FULL_NSP04.nsp','LUCID_BLOCKS_NX_FULL_NSP05.nsp','LUCID_BLOCKS_NX_FULL_NSP06.nsp') and not re.fullmatch(r'(pack-delta-[a-f0-9]+|opt01-spawn-delta)\.json',p.name):
+                if p.name not in ('lucid-blocks.nro','game.pck','README.txt','LUCID_BLOCKS_NX_FULL_NSP03.nsp','LUCID_BLOCKS_NX_FULL_NSP04.nsp','LUCID_BLOCKS_NX_FULL_NSP05.nsp','LUCID_BLOCKS_NX_FULL_NSP06.nsp','LUCID_BLOCKS_NX_FULL_NSP07.nsp') and not re.fullmatch(r'(pack-delta-[a-f0-9]+|opt01-spawn-delta)\.json',p.name):
                     raise ValueError('Unexpected file in rollback: '+str(p))
             removed.append({'path':str(resolved),'bytes':sum(p.stat().st_size for p in files)})
             shutil.rmtree(resolved)
@@ -49,8 +49,8 @@ def clean(root, build='NSP03', rollback_build='NSP02'):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--build',default='NSP03',choices=['NSP03','NSP04','NSP05','NSP06'])
-    p.add_argument('--rollback',default='NSP02',choices=['NSP02','NSP03','NSP04','NSP05'])
+    p.add_argument('--build',default='NSP03',choices=['NSP03','NSP04','NSP05','NSP06','NSP07'])
+    p.add_argument('--rollback',default='NSP02',choices=['NSP02','NSP03','NSP04','NSP05','NSP06'])
     p.add_argument('drive',type=Path,nargs='+')
     args=p.parse_args()
     for root in args.drive:clean(root,args.build,args.rollback)

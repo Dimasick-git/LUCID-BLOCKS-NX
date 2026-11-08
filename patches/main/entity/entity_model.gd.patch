@@ -1,0 +1,10 @@
+--- a/main/entity/entity_model.gd
++++ b/main/entity/entity_model.gd
+@@ -26,6 +26,7 @@
+ var variant: int = 1:
+ 	set(val):
+ 		variant = val
++		mesh_children.clear()
+ 
+ 		for child in self.find_children("*"):
+ 			if child.is_in_group("modulate"):

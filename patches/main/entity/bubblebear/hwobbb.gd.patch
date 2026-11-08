@@ -1,0 +1,13 @@
+--- a/main/entity/bubblebear/hwobbb.gd
++++ b/main/entity/bubblebear/hwobbb.gd
+@@ -51,10 +51,6 @@
+ 		leg_targets.append(new_target)
+ 		new_leg.target = new_target
+ 
+-		var d: MeshInstance3D = MeshInstance3D.new()
+-		d.mesh = SphereMesh.new()
+-		d.mesh.radius = 0.025
+-		d.mesh.height = 0.05
+ 
+ 		var new_ray: RayCast3D = RayCast3D.new()
+ 		%LegRays.add_child(new_ray)

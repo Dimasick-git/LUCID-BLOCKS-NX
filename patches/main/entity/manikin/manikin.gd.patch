@@ -1,6 +1,15 @@
 --- a/main/entity/manikin/manikin.gd
 +++ b/main/entity/manikin/manikin.gd
-@@ -356,7 +356,7 @@
+@@ -97,6 +97,8 @@
+ 
+ 
+ func _on_fired() -> void :
++	if Ref.coop_manager != null and Ref.coop_manager.is_client_session() and Ref.coop_manager.is_client_synced_entity(self):
++		return
+ 	if not is_spacer() or dead or disabled or state != CHASE:
+ 		return
+ 	if held_item.can_interact({}):
+@@ -356,7 +358,7 @@
  
  
  func get_look_direction() -> Vector3:
@@ -9,7 +18,7 @@
  
  
  func is_spacer() -> bool:
-@@ -364,4 +364,4 @@
+@@ -364,4 +366,4 @@
  
  
  func is_facing_player() -> bool:
