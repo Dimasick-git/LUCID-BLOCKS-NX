@@ -84,7 +84,9 @@ def main():
             assert hashlib.file_digest(response,'sha256').hexdigest()==report['sha256']
     published=api(base+'/releases/'+str(release['id']),{'draft':False},method='PATCH')
     assert not published['draft']
-    result={'release':published['html_url'],'asset':asset['browser_download_url'],
+    # A draft has an untagged download URL; take the final URL after publishing.
+    final_asset=next(item for item in published['assets'] if item['id']==asset['id'])
+    result={'release':published['html_url'],'asset':final_asset['browser_download_url'],
             'sha256':report['sha256'],'bytes':asset['size'],'commit':commit}
     args.nsp.with_suffix('.github.json').write_text(json.dumps(result,indent=2)+'\n')
     print('Published verified NSP:',published['html_url'],flush=True)
