@@ -1,6 +1,6 @@
 """Upload one verified NSP, verify GitHub's copy, then publish the draft."""
 from pathlib import Path
-import argparse, hashlib, http.client, json, os, subprocess, urllib.parse, urllib.request
+import argparse, hashlib, http.client, json, os, socket, subprocess, urllib.parse, urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -57,6 +57,8 @@ def main():
         '?'+urllib.parse.urlencode({'name':args.nsp.name}))
     connection=http.client.HTTPSConnection(upload.netloc,timeout=600)
     try:
+        connection.connect()
+        connection.sock.setsockopt(socket.SOL_SOCKET,socket.SO_SNDBUF,4*1024*1024)
         connection.putrequest('POST',upload.path+'?'+upload.query)
         for key,value in headers.items(): connection.putheader(key,value)
         connection.putheader('Content-Type','application/octet-stream')
