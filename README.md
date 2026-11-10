@@ -1,44 +1,62 @@
 <p align="center">
-  <img src="docs/images/icon.png" width="128" alt="Lucid Blocks NX — Dimasick-git">
+  <img src="docs/images/lucid-blocks-banner.png" alt="Lucid Blocks NX — LAN voxel world" width="1200">
 </p>
 
 <h1 align="center">Lucid Blocks — NX</h1>
 
-<p align="center">Неофициальный порт Lucid Blocks для Nintendo Switch.<br>Адаптация — <a href="https://github.com/Dimasick-git">Dimasick-git</a>.</p>
-
 <p align="center">
-  <a href="https://github.com/Dimasick-git/LUCID-BLOCKS-NX/releases">Опубликованные сборки</a> ·
-  <a href="docs/INSTALL_RU.md">Установка</a> ·
-  <a href="CHANGELOG.md">Изменения</a> ·
-  <a href="https://github.com/Dimasick-git/LUCID-BLOCKS-NX/issues">Сообщить о баге</a>
+  Experimental Nintendo Switch port with a complete NSP installer and LAN co-op for 2–4 players.
 </p>
 
-## NSP07 — бой и возрождение в LAN
+<p align="center">
+  <a href="https://github.com/Dimasick-git/LUCID-BLOCKS-NX/releases/tag/v0.1.0">Download v0.1.0</a> ·
+  <a href="docs/INSTALL_RU.md">Установка</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/Dimasick-git/LUCID-BLOCKS-NX/issues">Report a bug</a>
+</p>
 
-Цельный установщик для DBI: движок, игровые ресурсы и готовый кеш мешей внутри одного NSP. Игровой пакет сжат без потерь с **1,50 ГБ до 815 МБ**. Данные читаются блоками прямо из установленной игры; распаковка полного пакета на microSD при запуске не нужна.
+> **v0.1.0 is an experimental public release.** The project is not an official Lucid Blocks release. Install only on a console and software setup you control, and keep a backup of your saves.
 
-- Облегчённая вода: анимация и цвет сохранены, чтение экрана и глубины для преломления убрано.
-- Матовое освещение блоков и отключённые локальные тени.
-- Рендер 75%, дальность 32 блока, минимальные эффекты и общая громкость 75/75 по умолчанию.
-- Кеш подготовки чанков, ограниченная очередь мешей и штатный CPU FastLoad только на загрузке. Рабочие потоки используют разрешённую маску ядер процесса.
-- LAN для 2–4 игроков: создание комнаты из меню, автоматический поиск и подключение без IP, общий мир и спавн рядом; личные сохранения гостя отделены от сетевого кеша.
-- 321 готовый меш предметов; варианты с общей иконкой переиспользуют геометрию.
-- Поддержка SaltyNX: FPS после показа кадра и лимит FPSLocker через движок.
+## What is included
 
-**Тестовая сборка.** На ПК проверены хост и три клиента: автоматический поиск, общий спавн, блоки, предметы, действия и внешность шести типов мобов у всех гостей. Отдельно проверены повторные удары гостя, смерть моба, поднятие и возврат на спавн или к напарнику. Удалена утечка невидимых 3D-узлов у мимиков и Hwobbb; воспроизведённый аварийный выход с мимиком после исправления проходит без сбоя. Настройка коллизий и обновление анимаций клиента больше не дублируются. Новый прогон на Switch ещё нужен; стабильные 60 FPS не подтверждены.
+`v0.1.0` is based on the NSP07 build and includes the engine, game resources, prepared item meshes and the full compressed game pack in one DBI-ready NSP. The pack is compressed losslessly from about **1.50 GB to 815 MB**, and resources are read from the installed title instead of being unpacked to the microSD card at launch.
 
-## Установка
+- LAN co-op for **2–4 Nintendo Switch consoles**: create or find a room without entering an IP address.
+- Shared world, nearby spawn and separate guest save/cache data.
+- Combat, revive, item meshes, player appearance and multiplayer actions synchronized over LAN.
+- 321 prepared item meshes with geometry reuse for shared icons.
+- Lightweight water rendering, matte block lighting and disabled local shadows for a practical Switch profile.
+- Optional SaltyNX/FPSLocker integration.
 
-Установи `LUCID_BLOCKS_NX_FULL_NSP07.nsp` через DBI на всех консолях и запускай с HOME. Этот NSP содержит игру; прежний маленький форвардер запускал файлы с карты.
+## Performance profile
 
-Для LAN подключите 2–4 Switch к одному роутеру. Хост: **LAN Co-op → Создать комнату → выбрать мир**. Остальные: **LAN Co-op → Найти игру**. IP вводить не нужно, хост сразу продолжает игру. Всем нужен NSP07: старые сборки используют другой протокол. Интернет-комнат в этой сборке нет.
+The release profile uses 75% render scale, 32-block view distance and reduced effects. Current device results are approximately:
 
-Сохранения остаются в `/switch/lucid-blocks/LucidBlocksNX/`, журнал — в `/switch/lucid-blocks/boot.log`. При обновлении эту папку сохраняй. [Подробная инструкция](docs/INSTALL_RU.md).
+| System profile | Observed result |
+| --- | --- |
+| Stock settings, no overclock | **30–40 FPS** |
+| Overclocked system | **60+ FPS** |
 
-## Разработка
+Results depend on the scene, world state, LAN activity and the selected system profile. Stable 60 FPS is not promised for stock settings.
 
-Основа: Godot/Horizon, GLES Compatibility и статический gdblocks с double precision. В репозитории находятся патчи, загрузчик, инструменты сборки и документация. Игровой пакет, установщики, ключи и личные сохранения в Git не включаются.
+## Installation
 
-[Сборка и проверки](docs/DEVELOPMENT_RU.md) · [Формат сжатия](docs/PACK_FORMAT.md) · [Авторы и сторонний код](Credits.md)
+1. Download `LUCID_BLOCKS_NX_FULL_NSP07.nsp` from the [v0.1.0 release](https://github.com/Dimasick-git/LUCID-BLOCKS-NX/releases/tag/v0.1.0).
+2. Install the NSP with DBI on every console that will join a LAN session.
+3. Launch the installed title from HOME. Do not launch through Album because of its reduced memory budget.
+4. For LAN: the host chooses **LAN Co-op → Create Room → world**; other consoles choose **Find Game**.
 
-Оригинальная игра: [Lucid Blocks в Steam](https://store.steampowered.com/app/3495730/). Порт не является официальным выпуском авторов игры.
+All consoles must use the same v0.1.0/NSP07 protocol. Internet rooms are not included. Preserve `/switch/lucid-blocks/LucidBlocksNX/` when updating because it contains saves, settings and the writable cache. See the complete [Russian installation guide](docs/INSTALL_RU.md).
+
+## Development
+
+The port is built around Godot/Horizon, GLES Compatibility and a statically linked gdblocks runtime with double precision. This repository contains patches, the loader, packaging tools and validation documentation. Game packages, console keys and personal saves are not committed to Git.
+
+- [Build and validation guide](docs/DEVELOPMENT_RU.md)
+- [Build status](docs/BUILD_STATUS.md)
+- [Compressed pack format](docs/PACK_FORMAT.md)
+- [Credits and third-party code](Credits.md)
+
+## Disclaimer
+
+Lucid Blocks is the original game by its respective authors: [Lucid Blocks on Steam](https://store.steampowered.com/app/3495730/). This Nintendo Switch port is unofficial and is not affiliated with or endorsed by the original developers or Nintendo.
